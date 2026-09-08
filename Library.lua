@@ -13972,11 +13972,11 @@ function Library:CreateWindow(WindowInfo)
     local CurrentTabLabel
     local CurrentTabDescription
     local ResizeButton
-    local GlowImage
+    local GlowParts = {}
     local GlowConfig = {
         Enabled = false,
-        Transparency = 0.4,
-        Radius = 18,
+        Transparency = 0.35,
+        Radius = 16,
         UseAccent = true,
         Color = nil,
     }
@@ -15165,97 +15165,103 @@ function Library:CreateWindow(WindowInfo)
     --// Manual, opt-in soft glow drawn behind the window. It is never enabled or
     --// hidden automatically: some games run anticheats that can flag unusual
     --// rendering, so the user is the one who turns this on.
-    local function SetGlowColor(Color: Color3?)
-        if not GlowImage then
-            return
-        end
-
-        if typeof(Color) == "Color3" then
-            --// Detach from the theme so a custom color sticks across theme changes
-            GlowConfig.UseAccent = false
-            Library.Registry[GlowImage] = nil
-            GlowImage.ImageColor3 = Color
-        else
-            --// Follow the accent color and keep updating with the theme
-            GlowConfig.UseAccent = true
-            Library.Registry[GlowImage] = { ImageColor3 = "AccentColor" }
-            GlowImage.ImageColor3 = Library.Scheme.AccentColor
-        end
-    end
-
-    --// The asset is a 512x512 feathered shadow with a 49px border on each side,
-    --// so one edge slice always paints 49 * SliceScale pixels. Holding SliceScale
-    --// at 1 while only padding the image by Radius (18px by default) squeezes a
-    --// 49px falloff into 18px of overhang: the soft tail gets clipped and the halo
-    --// reads as a hard tinted box around the window. Instead, scale the slice to
-    --// the requested radius so the feather lands exactly in the padding.
+    --//
+    --// One glow image is bound to each frame it can sit behind: the window and
+    --// the minimized pill. Geometry is mirrored from the frame's own absolute
+    --// position and size through change signals instead of being polled every
+    --// frame, so the glow is always exactly where the frame is rather than
+    --// drifting a frame behind it while the window is dragged or resized.
+    --//
+    --// The asset is a feathered shadow with a 49px border per edge, so an edge
+    --// slice paints 49 * SliceScale pixels. Padding the image by Radius and
+    --// scaling the slice to match puts the whole falloff inside that padding:
+    --// the halo hugs the frame evenly and fades out, instead of being clipped
+    --// into a hard tinted box.
     local GLOW_SLICE = 49
 
-    local function GetGlowFeather(): number
+    local function GetGlowRadius(): number
         return math.max(0, GlowConfig.Radius)
     end
 
-    local function UpdateGlowShape()
-        if not GlowImage then
+    local function SyncGlow(Image: ImageLabel, Frame: GuiObject)
+        local Radius = GetGlowRadius()
+        local Size = Frame.AbsoluteSize
+
+        if not (GlowConfig.Enabled and Frame.Visible and Radius > 0 and Size.X > 0 and Size.Y > 0) then
+            Image.Visible = false
             return
         end
 
-        GlowImage.SliceScale = GetGlowFeather() / GLOW_SLICE
+        Image.Position = UDim2.fromOffset(Frame.AbsolutePosition.X - Radius, Frame.AbsolutePosition.Y - Radius)
+        Image.Size = UDim2.fromOffset(Size.X + Radius * 2, Size.Y + Radius * 2)
+        Image.SliceScale = Radius / GLOW_SLICE
+        Image.ImageTransparency = GlowConfig.Transparency
+        Image.Visible = true
     end
 
-    local function EnsureGlow()
-        if GlowImage and GlowImage.Parent then
+    --// Refresh every glow; used whenever the config or the window shape changes
+    local function UpdateGlowShape()
+        for Frame, Image in GlowParts do
+            SyncGlow(Image, Frame)
+        end
+    end
+
+    local function SetGlowColor(Color: Color3?)
+        GlowConfig.Color = typeof(Color) == "Color3" and Color or nil
+        GlowConfig.UseAccent = GlowConfig.Color == nil
+
+        for _, Image in GlowParts do
+            if GlowConfig.Color then
+                --// Detach from the theme so a custom color sticks across theme changes
+                Library.Registry[Image] = nil
+                Image.ImageColor3 = GlowConfig.Color
+            else
+                --// Follow the accent color and keep updating with the theme
+                Library.Registry[Image] = { ImageColor3 = "AccentColor" }
+                Image.ImageColor3 = Library.Scheme.AccentColor
+            end
+        end
+    end
+
+    local function BindGlow(Frame: GuiObject?)
+        if not Frame or GlowParts[Frame] then
             return
         end
 
-        GlowImage = New("ImageLabel", {
+        local Image = New("ImageLabel", {
             Active = false,
             BackgroundTransparency = 1,
-            --// 9-slice soft shadow asset; tinted to act as a glow
+            --// Feathered 9-slice shadow asset, tinted to act as a glow
             Image = "rbxassetid://6014261993",
             ImageColor3 = "AccentColor",
             ImageTransparency = GlowConfig.Transparency,
+            Name = "Glow",
             ScaleType = Enum.ScaleType.Slice,
             SliceCenter = Rect.new(GLOW_SLICE, GLOW_SLICE, 450, 450),
             Visible = false,
+            --// Behind the frame it belongs to (the ScreenGui uses sibling ZIndex)
             ZIndex = 0,
             Parent = ScreenGui,
         })
-        UpdateGlowShape()
-        --// Re-apply a custom color chosen before the glow instance existed
+
+        GlowParts[Frame] = Image
+
+        for _, Property in { "AbsolutePosition", "AbsoluteSize", "Visible" } do
+            Library:GiveSignal(Frame:GetPropertyChangedSignal(Property):Connect(function()
+                SyncGlow(Image, Frame)
+            end))
+        end
+
+        SyncGlow(Image, Frame)
+    end
+
+    local function EnsureGlow()
+        --// The window and the minimized pill each keep their own glow, so the
+        --// halo is already in place when one swaps for the other.
+        BindGlow(MainFrame)
+        BindGlow(MiniFrame)
         SetGlowColor(GlowConfig.Color)
-
-        Library:GiveSignal(RunService.RenderStepped:Connect(function()
-            if not (GlowImage and GlowImage.Parent and MainFrame and MainFrame.Parent) then
-                return
-            end
-
-            --// Glow follows whichever frame is on screen — the main window, or the
-            --// minimized pill when collapsed — so the accent glow stays with the UI.
-            local Target = if (MiniFrame and MiniFrame.Parent and MiniFrame.Visible) then MiniFrame else MainFrame
-
-            local Feather = GetGlowFeather()
-            local Size = Target.AbsoluteSize
-            local ShouldShow = GlowConfig.Enabled
-                and Target.Visible
-                and Feather > 0
-                and Size.X > 0
-                and Size.Y > 0
-
-            GlowImage.Visible = ShouldShow
-            if not ShouldShow then
-                return
-            end
-
-            GlowImage.Position = UDim2.fromOffset(
-                Target.AbsolutePosition.X - Feather,
-                Target.AbsolutePosition.Y - Feather
-            )
-            GlowImage.Size = UDim2.fromOffset(
-                Size.X + Feather * 2,
-                Size.Y + Feather * 2
-            )
-        end))
+        UpdateGlowShape()
     end
 
     --// Enabled: turn the glow on/off. Options: { Color: Color3?, Transparency: number?, Radius: number? }
@@ -15269,25 +15275,17 @@ function Library:CreateWindow(WindowInfo)
         if typeof(Options.Radius) == "number" then
             GlowConfig.Radius = math.max(0, Options.Radius)
         end
-        if Options.Color ~= nil then
-            --// Remember the choice so it survives a later enable, or a rebuild
-            GlowConfig.Color = typeof(Options.Color) == "Color3" and Options.Color or nil
-        end
 
         GlowConfig.Enabled = Enabled == true
         WindowInfo.Glow = GlowConfig.Enabled
 
         if GlowConfig.Enabled then
             EnsureGlow()
-            GlowImage.ImageTransparency = GlowConfig.Transparency
-            UpdateGlowShape()
-
             if Options.Color ~= nil then
-                SetGlowColor(GlowConfig.Color)
+                SetGlowColor(typeof(Options.Color) == "Color3" and Options.Color or nil)
             end
-        elseif GlowImage and GlowImage.Parent then
-            GlowImage.Visible = false
-            GlowImage.ImageTransparency = GlowConfig.Transparency
+        else
+            UpdateGlowShape()
         end
 
         return Window
