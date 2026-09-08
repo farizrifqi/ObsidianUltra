@@ -13978,6 +13978,7 @@ function Library:CreateWindow(WindowInfo)
         Transparency = 0.4,
         Radius = 18,
         UseAccent = true,
+        Color = nil,
     }
     local Tabs
     local Container
@@ -15182,20 +15183,28 @@ function Library:CreateWindow(WindowInfo)
         end
     end
 
-    --// Keep the glow soft. This is a feathered 9-slice shadow asset, so its
-    --// SliceScale governs edge softness, not corner radius — shrinking it just
-    --// collapses the halo into a hard squared box. A soft glow naturally reads
-    --// fine behind any corner radius, so we hold it at the native slice scale.
+    --// The asset is a 512x512 feathered shadow with a 49px border on each side,
+    --// so one edge slice always paints 49 * SliceScale pixels. Holding SliceScale
+    --// at 1 while only padding the image by Radius (18px by default) squeezes a
+    --// 49px falloff into 18px of overhang: the soft tail gets clipped and the halo
+    --// reads as a hard tinted box around the window. Instead, scale the slice to
+    --// the requested radius so the feather lands exactly in the padding.
+    local GLOW_SLICE = 49
+
+    local function GetGlowFeather(): number
+        return math.max(0, GlowConfig.Radius)
+    end
+
     local function UpdateGlowShape()
         if not GlowImage then
             return
         end
 
-        GlowImage.SliceScale = 1
+        GlowImage.SliceScale = GetGlowFeather() / GLOW_SLICE
     end
 
     local function EnsureGlow()
-        if GlowImage then
+        if GlowImage and GlowImage.Parent then
             return
         end
 
@@ -15207,36 +15216,44 @@ function Library:CreateWindow(WindowInfo)
             ImageColor3 = "AccentColor",
             ImageTransparency = GlowConfig.Transparency,
             ScaleType = Enum.ScaleType.Slice,
-            SliceCenter = Rect.new(49, 49, 450, 450),
+            SliceCenter = Rect.new(GLOW_SLICE, GLOW_SLICE, 450, 450),
             Visible = false,
             ZIndex = 0,
             Parent = ScreenGui,
         })
         UpdateGlowShape()
+        --// Re-apply a custom color chosen before the glow instance existed
+        SetGlowColor(GlowConfig.Color)
 
         Library:GiveSignal(RunService.RenderStepped:Connect(function()
-            if not (GlowImage and MainFrame) then
+            if not (GlowImage and GlowImage.Parent and MainFrame and MainFrame.Parent) then
                 return
             end
 
             --// Glow follows whichever frame is on screen — the main window, or the
             --// minimized pill when collapsed — so the accent glow stays with the UI.
-            local Target = if (MiniFrame and MiniFrame.Visible) then MiniFrame else MainFrame
+            local Target = if (MiniFrame and MiniFrame.Parent and MiniFrame.Visible) then MiniFrame else MainFrame
 
-            local ShouldShow = GlowConfig.Enabled and Target.Visible
+            local Feather = GetGlowFeather()
+            local Size = Target.AbsoluteSize
+            local ShouldShow = GlowConfig.Enabled
+                and Target.Visible
+                and Feather > 0
+                and Size.X > 0
+                and Size.Y > 0
+
             GlowImage.Visible = ShouldShow
             if not ShouldShow then
                 return
             end
 
-            local Radius = GlowConfig.Radius
             GlowImage.Position = UDim2.fromOffset(
-                Target.AbsolutePosition.X - Radius,
-                Target.AbsolutePosition.Y - Radius
+                Target.AbsolutePosition.X - Feather,
+                Target.AbsolutePosition.Y - Feather
             )
             GlowImage.Size = UDim2.fromOffset(
-                Target.AbsoluteSize.X + Radius * 2,
-                Target.AbsoluteSize.Y + Radius * 2
+                Size.X + Feather * 2,
+                Size.Y + Feather * 2
             )
         end))
     end
@@ -15252,6 +15269,10 @@ function Library:CreateWindow(WindowInfo)
         if typeof(Options.Radius) == "number" then
             GlowConfig.Radius = math.max(0, Options.Radius)
         end
+        if Options.Color ~= nil then
+            --// Remember the choice so it survives a later enable, or a rebuild
+            GlowConfig.Color = typeof(Options.Color) == "Color3" and Options.Color or nil
+        end
 
         GlowConfig.Enabled = Enabled == true
         WindowInfo.Glow = GlowConfig.Enabled
@@ -15262,9 +15283,9 @@ function Library:CreateWindow(WindowInfo)
             UpdateGlowShape()
 
             if Options.Color ~= nil then
-                SetGlowColor(typeof(Options.Color) == "Color3" and Options.Color or nil)
+                SetGlowColor(GlowConfig.Color)
             end
-        elseif GlowImage then
+        elseif GlowImage and GlowImage.Parent then
             GlowImage.Visible = false
             GlowImage.ImageTransparency = GlowConfig.Transparency
         end
