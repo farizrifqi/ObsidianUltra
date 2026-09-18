@@ -2432,6 +2432,10 @@ local SUBTAB_SLIDE_TWEEN = TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.Easi
 --// Fraction of the chip the underline spans, and its gap above the chip's bottom edge
 local SUBTAB_UNDERLINE_WIDTH = 0.66
 local SUBTAB_UNDERLINE_GAP = 3
+--// Same idea for a tabbox's tab strip: the underline spans this fraction of the
+--// button rather than the whole flex cell, so it reads as a marker not a border
+local TABBOX_UNDERLINE_WIDTH = 0.55
+local TABBOX_UNDERLINE_MIN = 16
 --// Transparency per shadow layer, nearest the chip first
 local SUBTAB_SHADOW_TRANSPARENCY = { 0.55, 0.75 }
 --// Hover squashes the chip slightly; the button itself keeps its size so the row
@@ -16315,10 +16319,13 @@ function Library:CreateWindow(WindowInfo)
                 local Scale = Library.DPIScale > 0 and Library.DPIScale or 1
                 local RelX = (Button.AbsolutePosition.X - TabboxButtons.AbsolutePosition.X) / Scale
                 local Width = Button.AbsoluteSize.X / Scale
-                local Pad = 12
 
-                local GoalPos = UDim2.fromOffset(math.floor(RelX + Pad), 35)
-                local GoalSize = UDim2.fromOffset(math.max(0, math.floor(Width - Pad * 2)), 2)
+                --// Centered under the button, a fraction of its width
+                local BarWidth = math.max(TABBOX_UNDERLINE_MIN, math.floor(Width * TABBOX_UNDERLINE_WIDTH))
+                BarWidth = math.min(BarWidth, math.floor(Width))
+
+                local GoalPos = UDim2.fromOffset(math.floor(RelX + (Width - BarWidth) / 2), 35)
+                local GoalSize = UDim2.fromOffset(BarWidth, 2)
 
                 TabboxUnderline.Visible = true
                 if Animate and Library.Animations and Library.Animations.SubTabUnderline ~= false then
