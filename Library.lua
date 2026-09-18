@@ -353,6 +353,34 @@ else
     Library.OriginalMinSize = Library.IsMobile and Vector2.new(480, 240) or Vector2.new(480, 360)
 end
 
+--// Discord card metrics. Only layout defaults live here - every image, colour,
+--// label and action on the card is caller-supplied.
+local DISCORD_BANNER_HEIGHT = 64
+local DISCORD_AVATAR_SIZE = 56
+local DISCORD_AVATAR_RING = 3
+local DISCORD_CARD_PADDING = 10
+local DISCORD_TITLE_HEIGHT = 18
+local DISCORD_SUBTITLE_HEIGHT = 16
+local DISCORD_BUTTON_HEIGHT = 26
+local DISCORD_BUTTON_GAP = 6
+local DISCORD_STATUS_SIZE = 16
+--// How much of the avatar hangs below the banner, as a fraction of its size
+local DISCORD_AVATAR_OVERHANG = 0.45
+local DISCORD_COPY_FEEDBACK_TIME = 1.5
+
+--// Named presets for the status dot; any of them can be overridden per card
+--// with StatusColor, and an unknown name simply hides the dot.
+local DISCORD_STATUS_COLORS = {
+    online = Color3.fromRGB(35, 165, 90),
+    idle = Color3.fromRGB(240, 178, 50),
+    away = Color3.fromRGB(240, 178, 50),
+    dnd = Color3.fromRGB(242, 63, 67),
+    busy = Color3.fromRGB(242, 63, 67),
+    streaming = Color3.fromRGB(89, 54, 149),
+    offline = Color3.fromRGB(128, 132, 142),
+    invisible = Color3.fromRGB(128, 132, 142),
+}
+
 local Templates = {
     --// UI \\--
     Frame = {
@@ -637,6 +665,32 @@ local Templates = {
         RectSize = Vector2.zero,
         ScaleType = Enum.ScaleType.Fit,
         Height = 200,
+        Visible = true,
+    },
+    DiscordBox = {
+        --// Images: asset id, rbxassetid://, a custom-asset url, or a lucide name
+        Banner = nil,
+        BannerColor = nil,          --// Color3 or scheme name; defaults to Accent
+        Avatar = nil,
+        AvatarColor = nil,
+
+        Title = "",
+        Subtitle = "",
+        Status = nil,               --// online / idle / dnd / streaming / offline
+        StatusColor = nil,          --// Color3 override for the dot
+
+        Accent = nil,               --// Color3 or scheme name; defaults to Blue
+        Link = nil,                 --// payload for buttons with Copy = true
+        Buttons = nil,              --// { { Text, Icon, Copy, Func, Style, Tooltip } }
+
+        --// Fallback button when a Link is given but no Buttons are
+        CopyText = "Copy Link",
+        CopyIcon = "copy",
+        CopiedText = "Copied!",
+        CopyFailedText = "Unsupported",
+
+        BannerHeight = DISCORD_BANNER_HEIGHT,
+        AvatarSize = DISCORD_AVATAR_SIZE,
         Visible = true,
     },
     PlayerInfo = {
@@ -6749,6 +6803,32 @@ end
 local PLAYER_CARD_NO_INSET = { X = 0, Width = 0 }
 local PLAYER_CARD_BANNER_INSET = { X = 2, Width = -5 }
 
+
+
+--// Colour a property that may be either a scheme name (re-themes itself) or a
+--// literal Color3 (pinned). Keeps Library.Registry in step either way.
+local function SetSchemeProperty(Object: Instance, Property: string, Value: (string | Color3)?)
+    local Registry = Library.Registry[Object]
+
+    if typeof(Value) == "Color3" then
+        if Registry then
+            Registry[Property] = nil
+        end
+
+        Object[Property] = Value
+        return
+    end
+
+    local SchemeName = typeof(Value) == "string" and Value or "BlueColor"
+    Object[Property] = Library.Scheme[SchemeName] or Library.Scheme.BlueColor
+
+    if Registry then
+        Registry[Property] = SchemeName
+    else
+        Library.Registry[Object] = { [Property] = SchemeName }
+    end
+end
+
 local BaseGroupbox = {}
 do
     local Funcs = {}
@@ -12405,6 +12485,586 @@ do
         end
 
         return PlayerInfo
+    end
+
+    --// Discord-style promo card: a banner strip, a circular avatar overlapping its
+    --// bottom edge with a cut-out ring, a name block, and a row of action buttons
+    --// (copy an invite, run a callback). Nothing here is tied to a particular server
+    --// or profile - every image, colour, label and action is passed in.
+    function Funcs:AddDiscordBox(Idx, Info)
+        if self.Destroyed then return nil end
+
+        Info = Library:Validate(Info, Templates.DiscordBox)
+
+        local Groupbox = self
+        local Container = Groupbox.Container
+
+        local Discord = {
+            Connections = {},
+            Destroyed = false,
+
+            Banner = Info.Banner,
+            BannerColor = Info.BannerColor,
+            Avatar = Info.Avatar,
+            AvatarColor = Info.AvatarColor,
+
+            Title = Info.Title,
+            Subtitle = Info.Subtitle,
+            Status = Info.Status,
+            StatusColor = Info.StatusColor,
+
+            Accent = Info.Accent,
+            Link = Info.Link,
+            Buttons = {},
+
+            BannerHeight = Info.BannerHeight,
+            AvatarSize = Info.AvatarSize,
+
+            Visible = Info.Visible,
+            Text = Info.Title,
+            Type = "DiscordBox",
+        }
+
+        local ButtonObjects = {}
+
+        local Holder = New("Frame", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, Discord.BannerHeight),
+            Visible = Discord.Visible,
+            Parent = Container,
+        })
+
+        --// The card clips, so the banner picks up the card corner radius at the top
+        local Card = New("Frame", {
+            BackgroundColor3 = "MainColor",
+            ClipsDescendants = true,
+            Size = UDim2.fromScale(1, 1),
+            Parent = Holder,
+        })
+        table.insert(Library.Corners, New("UICorner", {
+            CornerRadius = UDim.new(0, Library.CornerRadius),
+            Parent = Card,
+        }))
+        Library:AddOutline(Card)
+
+        local Banner = New("ImageLabel", {
+            BackgroundColor3 = "BlueColor",
+            BorderSizePixel = 0,
+            Image = "",
+            ScaleType = Enum.ScaleType.Crop,
+            Size = UDim2.new(1, 0, 0, Discord.BannerHeight),
+            Parent = Card,
+        })
+
+        --// Ring: a disc in the card colour behind the avatar, which is what makes
+        --// the avatar read as punched out of the banner
+        local AvatarRing = New("Frame", {
+            BackgroundColor3 = "MainColor",
+            BorderSizePixel = 0,
+            Size = UDim2.fromOffset(
+                Discord.AvatarSize + DISCORD_AVATAR_RING * 2,
+                Discord.AvatarSize + DISCORD_AVATAR_RING * 2
+            ),
+            ZIndex = 3,
+            Parent = Card,
+        })
+        New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = AvatarRing })
+
+        local Avatar = New("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundColor3 = "BackgroundColor",
+            Image = "",
+            Position = UDim2.fromScale(0.5, 0.5),
+            ScaleType = Enum.ScaleType.Crop,
+            Size = UDim2.fromOffset(Discord.AvatarSize, Discord.AvatarSize),
+            ZIndex = 4,
+            Parent = AvatarRing,
+        })
+        New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = Avatar })
+
+        local StatusRing = New("Frame", {
+            AnchorPoint = Vector2.new(1, 1),
+            BackgroundColor3 = "MainColor",
+            BorderSizePixel = 0,
+            Position = UDim2.new(1, 0, 1, 0),
+            Size = UDim2.fromOffset(DISCORD_STATUS_SIZE, DISCORD_STATUS_SIZE),
+            Visible = false,
+            ZIndex = 5,
+            Parent = Avatar,
+        })
+        New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = StatusRing })
+
+        local StatusDot = New("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundColor3 = "BlueColor",
+            BorderSizePixel = 0,
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.new(1, -4, 1, -4),
+            ZIndex = 6,
+            Parent = StatusRing,
+        })
+        New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = StatusDot })
+
+        local Body = New("Frame", {
+            BackgroundTransparency = 1,
+            Position = UDim2.fromOffset(0, Discord.BannerHeight),
+            Size = UDim2.new(1, 0, 1, -Discord.BannerHeight),
+            Parent = Card,
+        })
+        New("UIPadding", {
+            PaddingBottom = UDim.new(0, DISCORD_CARD_PADDING),
+            PaddingLeft = UDim.new(0, DISCORD_CARD_PADDING),
+            PaddingRight = UDim.new(0, DISCORD_CARD_PADDING),
+            Parent = Body,
+        })
+        New("UIListLayout", {
+            Padding = UDim.new(0, 2),
+            SortOrder = Enum.SortOrder.LayoutOrder,
+            Parent = Body,
+        })
+
+        --// Reserves the room the avatar hangs into
+        local AvatarSpacer = New("Frame", {
+            BackgroundTransparency = 1,
+            LayoutOrder = 0,
+            Size = UDim2.new(1, 0, 0, 0),
+            Parent = Body,
+        })
+
+        local TitleLabel = New("TextLabel", {
+            BackgroundTransparency = 1,
+            LayoutOrder = 1,
+            RichText = true,
+            Size = UDim2.new(1, 0, 0, DISCORD_TITLE_HEIGHT),
+            Text = Discord.Title,
+            TextSize = 16,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = Body,
+        })
+
+        local SubtitleLabel = New("TextLabel", {
+            BackgroundTransparency = 1,
+            LayoutOrder = 2,
+            RichText = true,
+            Size = UDim2.new(1, 0, 0, DISCORD_SUBTITLE_HEIGHT),
+            Text = Discord.Subtitle,
+            TextSize = 13,
+            TextTransparency = 0.4,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = Body,
+        })
+
+        local ButtonRow = New("Frame", {
+            BackgroundTransparency = 1,
+            LayoutOrder = 3,
+            Size = UDim2.new(1, 0, 0, DISCORD_BUTTON_HEIGHT + 6),
+            Visible = false,
+            Parent = Body,
+        })
+        New("UIListLayout", {
+            FillDirection = Enum.FillDirection.Horizontal,
+            HorizontalFlex = Enum.UIFlexAlignment.Fill,
+            Padding = UDim.new(0, DISCORD_BUTTON_GAP),
+            SortOrder = Enum.SortOrder.LayoutOrder,
+            Parent = ButtonRow,
+        })
+        New("UIPadding", { PaddingTop = UDim.new(0, 6), Parent = ButtonRow })
+
+        --// Layout \\--
+        local function GetOverhang(): number
+            return math.floor(Discord.AvatarSize * DISCORD_AVATAR_OVERHANG) + DISCORD_AVATAR_RING
+        end
+
+        function Discord:GetTotalHeight(): number
+            local BodyHeight = GetOverhang() + 4 + DISCORD_TITLE_HEIGHT + DISCORD_CARD_PADDING
+
+            if SubtitleLabel.Visible then
+                BodyHeight += DISCORD_SUBTITLE_HEIGHT + 2
+            end
+
+            if ButtonRow.Visible then
+                BodyHeight += DISCORD_BUTTON_HEIGHT + 6 + 2
+            end
+
+            return Discord.BannerHeight + BodyHeight
+        end
+
+        local function UpdateLayout()
+            local RingSize = Discord.AvatarSize + DISCORD_AVATAR_RING * 2
+            local Overhang = GetOverhang()
+
+            Banner.Size = UDim2.new(1, 0, 0, Discord.BannerHeight)
+
+            Avatar.Size = UDim2.fromOffset(Discord.AvatarSize, Discord.AvatarSize)
+            AvatarRing.Size = UDim2.fromOffset(RingSize, RingSize)
+            AvatarRing.Position = UDim2.fromOffset(
+                DISCORD_CARD_PADDING - DISCORD_AVATAR_RING,
+                Discord.BannerHeight - (RingSize - Overhang)
+            )
+
+            Body.Position = UDim2.fromOffset(0, Discord.BannerHeight)
+            Body.Size = UDim2.new(1, 0, 1, -Discord.BannerHeight)
+            AvatarSpacer.Size = UDim2.new(1, 0, 0, Overhang + 4)
+
+            Holder.Size = UDim2.new(1, 0, 0, Discord:GetTotalHeight())
+            Groupbox:Resize()
+        end
+
+        --// Content \\--
+        local function ApplyImage(Object: ImageLabel, Source: string?, FallbackColor: (string | Color3)?)
+            local Icon = Source and Library:GetCustomIcon(Source) or nil
+
+            if Icon then
+                Library:ApplyLucideIcon(Object, Icon)
+                Object.Image = Icon.Url
+                Object.ImageTransparency = 0
+            else
+                Object.Image = ""
+                Object.ImageRectOffset = Vector2.zero
+                Object.ImageRectSize = Vector2.zero
+            end
+
+            SetSchemeProperty(Object, "BackgroundColor3", FallbackColor)
+        end
+
+        local function UpdateBanner()
+            ApplyImage(Banner, Discord.Banner, Discord.BannerColor or Discord.Accent)
+        end
+
+        local function UpdateAvatar()
+            --// A lucide glyph is a tinted shape, not a picture, so the plain
+            --// background reads better behind it than the accent would
+            ApplyImage(Avatar, Discord.Avatar, Discord.AvatarColor or "BackgroundColor")
+        end
+
+        local function UpdateStatus()
+            local Color = Discord.StatusColor
+
+            if not Color and typeof(Discord.Status) == "string" then
+                Color = DISCORD_STATUS_COLORS[string.lower(Discord.Status)]
+            end
+
+            StatusRing.Visible = Color ~= nil
+
+            if Color then
+                SetSchemeProperty(StatusDot, "BackgroundColor3", Color)
+            end
+        end
+
+        local function UpdateText()
+            TitleLabel.Text = Discord.Title or ""
+            TitleLabel.Visible = TitleLabel.Text ~= ""
+
+            SubtitleLabel.Text = Discord.Subtitle or ""
+            SubtitleLabel.Visible = SubtitleLabel.Text ~= ""
+
+            Discord.Text = Trim(string.format("%s %s", StripRichText(TitleLabel.Text), StripRichText(SubtitleLabel.Text)))
+            UpdateLayout()
+        end
+
+        --// Buttons \\--
+        local function CreateActionButton(Config, Order: number)
+            local IsPrimary = string.lower(tostring(Config.Style or "Primary")) == "primary"
+            local Label = tostring(Config.Text or "")
+
+            local Base = New("TextButton", {
+                BackgroundColor3 = IsPrimary and "BlueColor" or "BackgroundColor",
+                LayoutOrder = Order,
+                Size = UDim2.new(0, 0, 0, DISCORD_BUTTON_HEIGHT),
+                Text = "",
+                Parent = ButtonRow,
+            })
+
+            if IsPrimary then
+                SetSchemeProperty(Base, "BackgroundColor3", Discord.Accent)
+            end
+
+            table.insert(Library.PillCorners, New("UICorner", {
+                CornerRadius = Library.CornerRadius > 0 and UDim.new(1, 0) or UDim.new(0, 0),
+                Parent = Base,
+            }))
+
+            if not IsPrimary then
+                New("UIStroke", { Color = "OutlineColor", Parent = Base })
+            end
+
+            local Content = New("Frame", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                AutomaticSize = Enum.AutomaticSize.X,
+                BackgroundTransparency = 1,
+                Position = UDim2.fromScale(0.5, 0.5),
+                Size = UDim2.fromOffset(0, 16),
+                Parent = Base,
+            })
+            New("UIListLayout", {
+                FillDirection = Enum.FillDirection.Horizontal,
+                HorizontalAlignment = Enum.HorizontalAlignment.Center,
+                VerticalAlignment = Enum.VerticalAlignment.Center,
+                Padding = UDim.new(0, 6),
+                Parent = Content,
+            })
+
+            local IconLabel
+            local Icon = Library:GetCustomIcon(Config.Icon)
+            if Icon then
+                IconLabel = New("ImageLabel", {
+                    BackgroundTransparency = 1,
+                    ImageColor3 = "FontColor",
+                    Size = UDim2.fromOffset(15, 15),
+                    Parent = Content,
+                })
+                Library:ApplyLucideIcon(IconLabel, Icon)
+            end
+
+            local TextLabel = New("TextLabel", {
+                AutomaticSize = Enum.AutomaticSize.X,
+                BackgroundTransparency = 1,
+                Size = UDim2.fromOffset(0, 16),
+                Text = Label,
+                TextSize = 14,
+                TextTransparency = IsPrimary and 0 or 0.25,
+                Parent = Content,
+            })
+
+            local ButtonObject = {
+                Base = Base,
+                Label = TextLabel,
+                Icon = IconLabel,
+                Config = Config,
+                Text = Label,
+                Primary = IsPrimary,
+            }
+
+            local HoverTween
+            local function SetHovered(Hovered: boolean)
+                StopTween(HoverTween)
+
+                HoverTween = TweenService:Create(TextLabel, Library.TweenInfo, {
+                    TextTransparency = Hovered and 0 or (IsPrimary and 0 or 0.25),
+                })
+                HoverTween:Play()
+
+                --// The filled button already reads as active, so only the outlined
+                --// one lightens on hover
+                if not IsPrimary then
+                    Base.BackgroundTransparency = Hovered and 0.35 or 0
+                end
+            end
+
+            table.insert(Discord.Connections, Base.MouseEnter:Connect(function()
+                SetHovered(true)
+            end))
+            table.insert(Discord.Connections, Base.MouseLeave:Connect(function()
+                SetHovered(false)
+            end))
+
+            --// Flash a result on the button itself, then put the label back
+            local FlashThread
+            local function Flash(Text: string)
+                if FlashThread then
+                    task.cancel(FlashThread)
+                end
+
+                TextLabel.Text = Text
+                FlashThread = task.delay(DISCORD_COPY_FEEDBACK_TIME, function()
+                    FlashThread = nil
+
+                    if not Discord.Destroyed then
+                        TextLabel.Text = ButtonObject.Text
+                    end
+                end)
+            end
+
+            ButtonObject.Flash = Flash
+
+            table.insert(Discord.Connections, Base.MouseButton1Click:Connect(function()
+                --// Copy = true takes the card Link; Copy = "..." carries its own payload
+                local Payload = Config.Copy
+                if Payload == true then
+                    Payload = Discord.Link
+                end
+
+                if typeof(Payload) == "string" and Payload ~= "" then
+                    if SetClipboard then
+                        SetClipboard(Payload)
+                        Flash(tostring(Config.CopiedText or Info.CopiedText))
+                    else
+                        --// No clipboard on this executor: say so rather than lie
+                        Flash(tostring(Config.CopyFailedText or Info.CopyFailedText))
+                    end
+                end
+
+                Library:SafeCallback(Config.Func, Payload)
+            end))
+
+            if typeof(Config.Tooltip) == "string" then
+                Library:AddTooltip(Config.Tooltip, nil, Base)
+            end
+
+            return ButtonObject
+        end
+
+        local function RebuildButtons()
+            for Index = #ButtonObjects, 1, -1 do
+                table.remove(ButtonObjects, Index).Base:Destroy()
+            end
+
+            for Order, Config in Discord.Buttons do
+                if typeof(Config) == "table" then
+                    table.insert(ButtonObjects, CreateActionButton(Config, Order))
+                end
+            end
+
+            ButtonRow.Visible = #ButtonObjects > 0
+            UpdateLayout()
+        end
+
+        --// A card given a Link but no buttons still needs a way to use it
+        local function ResolveButtons(Buttons)
+            if typeof(Buttons) == "table" and #Buttons > 0 then
+                return Buttons
+            end
+
+            if typeof(Discord.Link) == "string" and Discord.Link ~= "" then
+                return { { Text = Info.CopyText, Icon = Info.CopyIcon, Copy = true } }
+            end
+
+            return {}
+        end
+
+        --// API \\--
+        function Discord:SetTitle(Title: string?)
+            Discord.Title = Title or ""
+            UpdateText()
+        end
+
+        function Discord:SetSubtitle(Subtitle: string?)
+            Discord.Subtitle = Subtitle or ""
+            UpdateText()
+        end
+
+        function Discord:SetBanner(Banner: string?, Color: (Color3 | string)?)
+            Discord.Banner = Banner
+            if Color ~= nil then
+                Discord.BannerColor = Color
+            end
+
+            UpdateBanner()
+        end
+
+        function Discord:SetAvatar(Avatar: string?, Color: (Color3 | string)?)
+            Discord.Avatar = Avatar
+            if Color ~= nil then
+                Discord.AvatarColor = Color
+            end
+
+            UpdateAvatar()
+        end
+
+        function Discord:SetStatus(Status: string?, Color: Color3?)
+            Discord.Status = Status
+            Discord.StatusColor = Color
+            UpdateStatus()
+        end
+
+        function Discord:SetAccent(Accent: (Color3 | string)?)
+            Discord.Accent = Accent
+
+            if not Discord.BannerColor then
+                UpdateBanner()
+            end
+
+            for _, ButtonObject in ButtonObjects do
+                if ButtonObject.Primary then
+                    SetSchemeProperty(ButtonObject.Base, "BackgroundColor3", Accent)
+                end
+            end
+        end
+
+        function Discord:SetLink(Link: string?)
+            Discord.Link = Link
+        end
+
+        function Discord:SetButtons(Buttons)
+            Discord.Buttons = ResolveButtons(Buttons)
+            RebuildButtons()
+        end
+
+        function Discord:SetButtonText(Index: number, Text: string)
+            local ButtonObject = ButtonObjects[Index]
+            if not ButtonObject then
+                return
+            end
+
+            ButtonObject.Text = Text
+            ButtonObject.Label.Text = Text
+        end
+
+        function Discord:SetBannerHeight(Height: number)
+            assert(Height > 0, "Height must be greater than 0.")
+
+            Discord.BannerHeight = Height
+            UpdateLayout()
+        end
+
+        function Discord:SetAvatarSize(Size: number)
+            assert(Size > 0, "Size must be greater than 0.")
+
+            Discord.AvatarSize = Size
+            UpdateLayout()
+        end
+
+        function Discord:SetVisible(Visible: boolean)
+            Discord.Visible = Visible
+
+            Holder.Visible = Visible
+            Groupbox:Resize()
+        end
+
+        function Discord:Destroy()
+            Discord.Destroyed = true
+
+            for _, Connection in Discord.Connections do
+                Connection:Disconnect()
+            end
+            table.clear(Discord.Connections)
+
+            if Holder then
+                Holder:Destroy()
+            end
+
+            local ElemIdx = table.find(Groupbox.Elements, Discord)
+            if ElemIdx then
+                table.remove(Groupbox.Elements, ElemIdx)
+            end
+
+            Groupbox:Resize()
+
+            if Idx ~= nil then
+                Options[Idx] = nil
+            end
+        end
+
+        UpdateBanner()
+        UpdateAvatar()
+        UpdateStatus()
+        UpdateText()
+
+        Discord.Buttons = ResolveButtons(Info.Buttons)
+        RebuildButtons()
+
+        Discord.Holder = Holder
+        table.insert(Groupbox.Elements, Discord)
+
+        --// Unlike most elements the card has no value to save, so an index is
+        --// optional; it is only registered when one is given
+        if Idx ~= nil then
+            Options[Idx] = Discord
+        end
+
+        return Discord
     end
 
     function Funcs:AddVideo(Idx, Info)

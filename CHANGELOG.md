@@ -16,6 +16,7 @@
   a tab re-flexes the row, so the underline now re-measures against the active button.
 
 [features]
++ Groupbox:AddDiscordBox(Idx, Info) — a Discord-style promo card: banner, circular avatar overlapping it, status dot, title/subtitle, and a row of action buttons (copy an invite link, run a callback). Nothing is hardcoded — images, colours, labels and actions are all passed in; the accent defaults to Scheme.BlueColor. Methods: SetTitle/SetSubtitle/SetBanner/SetAvatar/SetStatus/SetAccent/SetLink/SetButtons/SetButtonText/SetBannerHeight/SetAvatarSize/SetVisible/GetTotalHeight.
 + Window:SetGlow(Enabled, Options?) — opt-in soft glow behind the window. Off by default and never forced/hidden (games' anticheats can flag unusual rendering). Options: { Color: Color3? (defaults to & follows the accent color), Transparency: number?, Radius: number? }. Also settable at creation via Glow = true.
 + Window:GetSizePosition() / Window:SetSizePosition(Size?, Position?) — read/apply the window size & position (clamped to the viewport & min size, relayouts tabs).
 + SaveManager now saves & restores the UI size and position. Skip it with SaveManager:SetIgnoreIndexes({ "WindowLayout" }).

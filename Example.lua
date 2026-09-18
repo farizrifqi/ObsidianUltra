@@ -111,9 +111,33 @@ do
     })
 
     -- On a GROUPBOX it is the compact form: just the avatar box.
-    Tabs.Home:AddRightGroupbox("Profile", "user"):AddPlayerInfo("HomeProfile", {
+    local Profile = Tabs.Home:AddRightGroupbox("Profile", "user")
+    Profile:AddPlayerInfo("HomeProfile", {
         ThumbnailType = "Bust",
         Height = 190,
+    })
+
+    -- A Discord-style promo card: banner, overlapping avatar, name block, buttons.
+    -- Every image, colour and label is passed in; nothing is baked into the library.
+    Profile:AddDiscordBox("Community", {
+        -- Banner = 0000000000,        -- any asset id / url / lucide name
+        -- Avatar = 0000000000,        -- falls back to a flat colour when omitted
+        Title = "Ouroboros Hub",
+        Subtitle = "Scripts, updates & support",
+        Status = "online",             -- online | idle | dnd | streaming | offline
+        Link = "discord.gg/example",   -- what the copy button writes
+
+        Buttons = {
+            { Text = "Copy Invite", Icon = "copy", Copy = true },
+            {
+                Text = "Learn More",
+                Icon = "external-link",
+                Style = "Secondary",
+                Func = function()
+                    Library:Notify({ Title = "Discord", Description = "Invite: discord.gg/example", Time = 4 })
+                end,
+            },
+        },
     })
 
     -- Combat groupbox: toggle + synced keybind + colorpicker, a slider, and a dropdown.

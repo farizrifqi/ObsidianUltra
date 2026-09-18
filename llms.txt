@@ -243,6 +243,54 @@ Tab:AddPlayerInfo("Banner", {
 Methods: `SetTitle`, `SetDescription`, `SetPlayer`, `SetUserId`, `SetThumbnail`,
 `SetHeight`, `SetVisible`, `GetTotalHeight`.
 
+## Discord box
+
+`Groupbox:AddDiscordBox(Idx, Info)` — a Discord-style promo card (banner, circular
+avatar overlapping its bottom edge, status dot, name block, action buttons). Nothing is
+Discord-specific in code: every image, colour, label and action is passed in. Works in any
+groupbox, tabbox tab or dependency box.
+
+```lua
+local Card = Groupbox:AddDiscordBox("Community", {
+    Banner = 0,          -- asset id / rbxassetid:// / custom-asset url / lucide name
+    BannerColor = nil,   -- Color3 or scheme name; fallback when Banner is unset (default Accent)
+    Avatar = 0,
+    AvatarColor = nil,
+
+    Title = "Ouroboros Hub",
+    Subtitle = "Scripts, updates & support",
+    Status = "online",   -- online|idle|away|dnd|busy|streaming|offline|invisible; nil hides the dot
+    StatusColor = nil,   -- Color3 override
+
+    Accent = nil,        -- Color3 or scheme name; defaults to "BlueColor"
+    Link = "discord.gg/example",   -- payload for buttons with Copy = true
+
+    Buttons = {
+        { Text = "Copy Invite", Icon = "copy", Copy = true },
+        { Text = "Open", Style = "Secondary", Func = function(Payload) end },
+    },
+
+    BannerHeight = 64, AvatarSize = 56, Visible = true,
+})
+```
+
+Button fields: `Text`, `Icon`, `Copy` (`true` = the card's `Link`, or a string of its own),
+`Func(Payload)`, `Style` (`"Primary"` filled in the accent = default, `"Secondary"`
+outlined), `Tooltip`, `CopiedText`, `CopyFailedText`.
+
+Methods: `SetTitle`, `SetSubtitle`, `SetBanner(Image, Color?)`, `SetAvatar(Image, Color?)`,
+`SetStatus(Status, Color?)`, `SetAccent`, `SetLink`, `SetButtons`,
+`SetButtonText(Index, Text)`, `SetBannerHeight`, `SetAvatarSize`, `SetVisible`,
+`GetTotalHeight`, `Destroy`.
+
+Notes:
+- A copy button flashes `CopiedText` (default `"Copied!"`) for 1.5s, or `CopyFailedText`
+  (default `"Unsupported"`) when the executor has no clipboard. `Func` still runs either way.
+- `Link` with no `Buttons` gives one default copy button (`CopyText` / `CopyIcon`).
+- Colours given as scheme names (`"BlueColor"`, `"AccentColor"`) re-theme themselves; a
+  `Color3` is pinned.
+- The card sizes itself; title/subtitle/buttons each drop out when empty.
+
 ## Notifications & history
 
 ```lua
