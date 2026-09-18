@@ -2,9 +2,18 @@
 
 ```diff
 [changes]
+* Groupboxes now slide open/shut when collapsed instead of snapping — the body is
+  clipped behind the card edge while the height animates, and the chevron spins with
+  it. Gated on Animations.GroupboxCollapse, which defaults to true (independent of
+  the general Animations.Groupbox resize flag).
+
 * Tabboxes redesigned: the folder-tab buttons are now a clean icon/text strip with
   a sliding accent underline and a smooth content-switch animation (underline slide
   gated on Animations.SubTabUnderline, content slide on Animations.TabSwitch). Tabbox:AddTab(Name, IconName) — pass a name, an icon, or both ("" name = icon-only).
+
+[fixes]
+* Tabbox underline no longer spans the whole strip until the first tab switch: adding
+  a tab re-flexes the row, so the underline now re-measures against the active button.
 
 [features]
 + Window:SetGlow(Enabled, Options?) — opt-in soft glow behind the window. Off by default and never forced/hidden (games' anticheats can flag unusual rendering). Options: { Color: Color3? (defaults to & follows the accent color), Transparency: number?, Radius: number? }. Also settable at creation via Glow = true.

@@ -260,6 +260,8 @@ local Library = {
         ToggleWindow = false,
         TabSwitch = false,
         Groupbox = false,
+        --// The collapse/expand slide; on by default, it is a small ornament
+        GroupboxCollapse = true,
         Dropdown = false,
         KeyPicker = false
     },
@@ -471,6 +473,8 @@ local Templates = {
             ToggleWindow = false,
             TabSwitch = false,
             Groupbox = false,
+            --// The collapse/expand slide; on by default, it is a small ornament
+            GroupboxCollapse = true,
             Dropdown = false,
             KeyPicker = false,
             --// The sub tab bar slide; on by default, it is a small ornament
@@ -16574,6 +16578,35 @@ function Library:CreateWindow(WindowInfo)
 
                 setmetatable(Tab, BaseGroupbox)
 
+                --// Adding a tab re-flexes the row, so every button shrinks while
+                --// the row itself keeps its width. Without this the underline would
+                --// keep the first tab's full-row width until the user switched tabs.
+                table.insert(
+                    Tab.Connections,
+                    Button:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+                        if Tabbox.ActiveTab == Tab then
+                            MoveUnderline(Tab.ButtonHolder, false)
+                        end
+                    end)
+                )
+                table.insert(
+                    Tab.Connections,
+                    Button:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
+                        if Tabbox.ActiveTab == Tab then
+                            MoveUnderline(Tab.ButtonHolder, false)
+                        end
+                    end)
+                )
+
+                if Tabbox.ActiveTab then
+                    local ActiveButton = Tabbox.ActiveTab.ButtonHolder
+                    task.defer(function()
+                        if not Tabbox.Destroyed then
+                            MoveUnderline(ActiveButton, false)
+                        end
+                    end)
+                end
+
                 Tabbox.Tabs[TabStoringIndex] = Tab
                 Tabbox:UpdateCorners()
 
@@ -16847,8 +16880,11 @@ function Library:CreateWindow(WindowInfo)
 
             local ResizeTween
             local CollapseArrowTween
+            local CollapseClipThread
 
-            function Groupbox:Resize()
+            --// ForceAnimate lets the collapse slide play even when the general
+            --// groupbox resize animation is off
+            function Groupbox:Resize(ForceAnimate: boolean?)
                 if ResizeTween then
                     StopTween(ResizeTween, true)
                     ResizeTween = nil
@@ -16864,7 +16900,7 @@ function Library:CreateWindow(WindowInfo)
                 GroupboxContainer.Size = UDim2.new(1, 0, 0, ContainerSize)
                 GroupboxLine.Visible = not Groupbox.Collapsed
 
-                if Library.Animations and Library.Animations.Groupbox then
+                if ForceAnimate == true or (Library.Animations and Library.Animations.Groupbox) then
                     local TweenInfo = Library.GroupboxTweenInfo or TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
                     local Tween = TweenService:Create(GroupboxHolder, TweenInfo, { Size = TargetSize })
                     ResizeTween = Tween
@@ -16904,9 +16940,24 @@ function Library:CreateWindow(WindowInfo)
 
                 local TargetRotation = if Collapsed then 0 else 180
 
-                GroupboxContainer.Visible = not Collapsed
-                if Library.Animations and Library.Animations.Groupbox then
-                    local TweenInfo = Library.GroupboxTweenInfo or TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+                --// Slide the card open/shut instead of snapping. The body stays
+                --// parented and visible for the whole slide, with the holder
+                --// clipping it, so the contents wipe away behind the edge.
+                local AnimateCollapse = (Library.Animations == nil) or (Library.Animations.GroupboxCollapse ~= false)
+                if CollapseClipThread then
+                    task.cancel(CollapseClipThread)
+                    CollapseClipThread = nil
+                end
+
+                if AnimateCollapse then
+                    GroupboxHolder.ClipsDescendants = true
+                    GroupboxContainer.Visible = true
+                else
+                    GroupboxContainer.Visible = not Collapsed
+                end
+
+                if AnimateCollapse then
+                    local TweenInfo = Library.RotatingChevronTweenInfo or TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
                     local Tween = TweenService:Create(GroupboxCollapseArrow, TweenInfo, { Rotation = TargetRotation })
                     CollapseArrowTween = Tween
 
@@ -16926,7 +16977,23 @@ function Library:CreateWindow(WindowInfo)
                     GroupboxCollapseArrow.Rotation = TargetRotation
                 end
 
-                Groupbox:Resize()
+                Groupbox:Resize(AnimateCollapse)
+
+                if AnimateCollapse then
+                    --// Restore clipping/visibility once the slide has landed, so
+                    --// pop-outs and overflowing menus behave normally again
+                    local SlideInfo = Library.GroupboxTweenInfo or TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                    CollapseClipThread = task.delay(SlideInfo.Time, function()
+                        CollapseClipThread = nil
+
+                        if Groupbox.Destroyed then
+                            return
+                        end
+
+                        GroupboxHolder.ClipsDescendants = false
+                        GroupboxContainer.Visible = not Groupbox.Collapsed
+                    end)
+                end
             end
 
             function Groupbox:ToggleCollapsed()
@@ -16972,6 +17039,11 @@ function Library:CreateWindow(WindowInfo)
                 if CollapseArrowTween then
                     StopTween(CollapseArrowTween, true)
                     CollapseArrowTween = nil
+                end
+
+                if CollapseClipThread then
+                    task.cancel(CollapseClipThread)
+                    CollapseClipThread = nil
                 end
 
                 if Groupbox.Connections then
