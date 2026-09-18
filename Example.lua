@@ -437,6 +437,62 @@ do
     More:AddToggle("TabboxToggle3", { Text = "Icon-only tab toggle" })
     More:AddButton({ Text = "A button", Func = function() Log("Tabbox icon tab button") end })
 
+    -- Discord boxes: a banner, a circular avatar overlapping it, an optional status
+    -- dot, a name block and action buttons. Everything is passed in, so the same
+    -- element does a server invite or a profile card.
+    local Community = Tabs.Elements:AddRightGroupbox("Discord", "message-circle")
+
+    -- Server invite: the common case. Link is what Copy = true writes, and the
+    -- accent defaults to Scheme.BlueColor, so this needs no colours at all.
+    Community:AddDiscordBox("ExampleServer", {
+        -- Banner = 0000000000,   -- any asset id / rbxassetid:// / url / lucide name
+        -- Avatar = 0000000000,   -- both fall back to flat colour when omitted
+        Title = "Ouroboros Hub",
+        Subtitle = "Scripts, updates & support",
+        Status = "online",
+        Link = "discord.gg/example",
+
+        Buttons = {
+            { Text = "Copy Invite", Icon = "copy", Copy = true, Tooltip = "Copies the invite link" },
+            {
+                Text = "What's this?",
+                Icon = "external-link",
+                Style = "Secondary",   -- outlined instead of filled
+                Func = function()
+                    Library:Notify({ Title = "Discord", Description = "Roblox cannot open links, so copy it.", Time = 4 })
+                end,
+            },
+        },
+    })
+
+    -- Profile card: a pinned accent, a busy status, and a button carrying its own
+    -- copy payload rather than the card's Link.
+    local Profile = Community:AddDiscordBox("ExampleProfile", {
+        Title = "example_user",
+        Subtitle = "Playing Defeat Anime RNG",
+        Status = "dnd",
+        Accent = Color3.fromRGB(88, 101, 242),   -- a Color3 pins the colour
+        BannerHeight = 52,
+        AvatarSize = 48,
+
+        Buttons = {
+            { Text = "Copy Tag", Icon = "at-sign", Copy = "example_user#0001", CopiedText = "Tag copied" },
+        },
+    })
+
+    -- Everything is settable at runtime.
+    Community:AddButton({
+        Text = "Randomise the profile card",
+        Func = function()
+            local Statuses = { "online", "idle", "dnd", "streaming", "offline" }
+            local Pick = Statuses[math.random(#Statuses)]
+
+            Profile:SetStatus(Pick)
+            Profile:SetSubtitle(string.format("Status: %s", Pick))
+            Log(string.format("Discord card status -> %s", Pick))
+        end,
+    })
+
     -- A standalone tabbox (dropped straight on a column) still gets its own bordered box.
     local StandaloneBox = Tabs.Elements:AddRightTabbox("Standalone Tabbox")
     StandaloneBox:AddTab("Tab 1", "star"):AddToggle("StandaloneToggle1", { Text = "Tab 1 toggle" })
