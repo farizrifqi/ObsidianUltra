@@ -2,12 +2,16 @@
 
 ```diff
 [changes]
-* Sidebar tabs are now rounded chips instead of full-width bars: the tab list gets a
-  6px gutter with 4px between buttons, each button is an 8px-radius card, and the open
-  tab is lit from its top edge -- a hairline accent border and a faint accent wash,
-  both brightest along the top and fading out downwards, clipped to the chip. Baked
-  in; there is nothing to configure. Minimum sidebar/compact widths were nudged up to
-  keep the chips the same size inside the new gutter.
+* Compact sidebar tabs are now dock chips: while the sidebar is compact, the open
+  tab's glyph sits on a 32px accent-filled rounded square (a white-to-grey gradient
+  over the accent, plus a white top rim) and flips to black or white -- whichever
+  reads against the accent. Hovering an inactive glyph fades the chip in faintly,
+  and switching tabs grows the chip from 26px. Expanding the sidebar brings the
+  labels back and drops the chip: a row with a label is a row, not a chip, so the
+  button returns to the plain full-width card.
+* Compact glyphs sit at 18px (padding 6 -> 11) so they read inside the chip.
+* Sidebar tab list gets a 6px gutter with 4px between buttons; minimum sidebar and
+  compact widths were nudged up to keep the buttons the same size inside it.
 ```
 
 ## 02.09.2026

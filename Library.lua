@@ -2452,71 +2452,186 @@ function Library:MakeLine(Frame: GuiObject, Info)
     return Line
 end
 
---// Sidebar tab buttons are drawn as rounded chips. The open tab is a plain, very
---// slightly raised card whose light comes from its top edge only: the hairline
---// border is brightest across the top and has died out by a third of the way down,
---// and the same ramp carries a barely-there wash over the face. Everything is
---// clipped to the chip's own rounded rectangle -- there is no halo around it, and
---// the sides and bottom are left unlit, so the chip reads as catching light from
---// above rather than being outlined or made to glow.
+--// Compact sidebar chips.
 --//
---// A gradient's transparency is not tweenable, so the ramp only sets the falloff
---// shape; the fade in/out on a tab switch is driven by the border's and wash's own
---// transparency, which the ramp modulates.
-local TAB_CHIP_CORNER = 8
-local TAB_CHIP_FADE = NumberSequence.new({
+--// While the sidebar is compact the tab list is a column of glyphs, and the open
+--// tab is marked the way a dock marks one: the glyph sits on a small accent-filled
+--// rounded square, and the glyph itself flips to whatever reads against the accent.
+--// The chip is the only surface in the library painted accent, so it needs no
+--// outline and no halo to be found -- it is the brightest thing in the column.
+--//
+--// The fill is a single accent-bound colour with a white-to-grey gradient over it:
+--// multiplying, rather than a second colour, means the top-lit falloff follows the
+--// accent through a theme change with nothing to keep in sync. A white top rim,
+--// fading out by the halfway line, keeps the fill from reading flat.
+--//
+--// Expanding the sidebar puts the labels back, and a row with a label is a row, not
+--// a chip: the chip is dropped and the button returns to the plain full-width card.
+local TAB_CHIP_SIZE = 32
+local TAB_CHIP_REST_SIZE = 26
+local TAB_CHIP_RADIUS = 9
+local TAB_BAR_RADIUS = 8
+
+local TAB_CHIP_SHADE = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(194, 194, 194)),
+})
+local TAB_CHIP_RIM = NumberSequence.new({
     NumberSequenceKeypoint.new(0, 0),
-    NumberSequenceKeypoint.new(0.32, 0.9),
+    NumberSequenceKeypoint.new(0.45, 0.85),
     NumberSequenceKeypoint.new(1, 1),
 })
 
---// Returns a setter that lights the chip up (open tab) or fades it back out
+--// Every skinned tab button, so a sidebar width change can reach all of them
+Library.TabSkins = setmetatable({}, { __mode = "k" })
+
+--// Black or white, whichever the accent can carry a glyph against
+local function OnAccentColor(): Color3
+    local Accent = Library.Scheme.AccentColor
+    local Luminance = Accent.R * 0.299 + Accent.G * 0.587 + Accent.B * 0.114
+    return Luminance > 0.6 and Color3.fromRGB(12, 12, 12) or Color3.new(1, 1, 1)
+end
+
 function Library:SkinTabButton(Button: TextButton)
     New("UICorner", {
-        CornerRadius = UDim.new(0, TAB_CHIP_CORNER),
+        CornerRadius = UDim.new(0, TAB_BAR_RADIUS),
         Parent = Button,
     })
 
-    --// ZIndex 0 keeps the wash under the icon and label, which sit at 1
-    local Wash = New("Frame", {
+    --// ZIndex 0 keeps the chip under the glyph, which sits at 1
+    local Chip = New("Frame", {
         Active = false,
+        AnchorPoint = Vector2.new(0.5, 0.5),
         BackgroundColor3 = "AccentColor",
         BackgroundTransparency = 1,
-        Name = "TabWash",
-        Size = UDim2.fromScale(1, 1),
+        Name = "TabChip",
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(TAB_CHIP_REST_SIZE, TAB_CHIP_REST_SIZE),
+        Visible = false,
         ZIndex = 0,
         Parent = Button,
     })
     New("UICorner", {
-        CornerRadius = UDim.new(0, TAB_CHIP_CORNER),
-        Parent = Wash,
+        CornerRadius = UDim.new(0, TAB_CHIP_RADIUS),
+        Parent = Chip,
     })
     New("UIGradient", {
+        Color = TAB_CHIP_SHADE,
         Rotation = 90,
-        Transparency = TAB_CHIP_FADE,
-        Parent = Wash,
+        Parent = Chip,
     })
 
-    local Stroke = New("UIStroke", {
-        Color = "AccentColor",
+    local Rim = New("UIStroke", {
+        Color = "WhiteColor",
         Thickness = 1,
         Transparency = 1,
-        Parent = Button,
+        Parent = Chip,
     })
     New("UIGradient", {
         Rotation = 90,
-        Transparency = TAB_CHIP_FADE,
-        Parent = Stroke,
+        Transparency = TAB_CHIP_RIM,
+        Parent = Rim,
     })
 
-    return function(Active: boolean)
-        TweenService:Create(Wash, Library.TweenInfo, {
-            BackgroundTransparency = Active and 0.94 or 1,
-        }):Play()
-        TweenService:Create(Stroke, Library.TweenInfo, {
-            Transparency = Active and 0.45 or 1,
-        }):Play()
+    local Skin = {
+        Active = false,
+        Compact = Library.SidebarCompacted == true,
+        Hovered = false,
+        Icon = nil,
+        IconColor = nil,
+    }
+
+    --// The glyph is accent-coloured at rest, which is unreadable on an accent chip,
+    --// so an open compact tab swaps it for its on-accent counterpart. The swap goes
+    --// through the registry, so a theme change still lands on the right one.
+    local function ApplyIcon()
+        local Icon = Skin.Icon
+        if not Icon then
+            return
+        end
+
+        local Entry = Library.Registry[Icon]
+        if not Entry then
+            Entry = {}
+            Library.Registry[Icon] = Entry
+        end
+
+        if Skin.Compact and Skin.Active then
+            Entry.ImageColor3 = OnAccentColor
+            Icon.ImageColor3 = OnAccentColor()
+        else
+            Entry.ImageColor3 = Skin.IconColor or "AccentColor"
+            Icon.ImageColor3 = Library.Scheme[Skin.IconColor or "AccentColor"] or Icon.ImageColor3
+        end
     end
+
+    local function Refresh()
+        --// Compact: the chip carries the state and the button stays transparent.
+        --// Expanded: no chip, and the button is the card it always was.
+        local ChipFill = if not Skin.Compact
+            then 1
+            elseif Skin.Active then 0
+            elseif Skin.Hovered then 0.88
+            else 1
+
+        Chip.Visible = Skin.Compact
+        TweenService:Create(Chip, Library.TweenInfo, {
+            BackgroundTransparency = ChipFill,
+            --// A touch of growth on the way in, so switching tabs has a beat to it
+            Size = UDim2.fromOffset(
+                Skin.Active and TAB_CHIP_SIZE or TAB_CHIP_REST_SIZE,
+                Skin.Active and TAB_CHIP_SIZE or TAB_CHIP_REST_SIZE
+            ),
+        }):Play()
+
+        TweenService:Create(Rim, Library.TweenInfo, {
+            Transparency = (Skin.Compact and Skin.Active) and 0.55 or 1,
+        }):Play()
+
+        TweenService:Create(Button, Library.TweenInfo, {
+            BackgroundTransparency = (not Skin.Compact and Skin.Active) and 0 or 1,
+        }):Play()
+
+        ApplyIcon()
+    end
+
+    --// The glyph is created after the button, so it is handed over once it exists
+    function Skin:SetIcon(Icon: ImageLabel?)
+        Skin.Icon = Icon
+        if Icon then
+            local Entry = Library.Registry[Icon]
+            Skin.IconColor = typeof(Entry) == "table" and typeof(Entry.ImageColor3) == "string"
+                    and Entry.ImageColor3
+                or "AccentColor"
+        end
+        ApplyIcon()
+    end
+
+    function Skin:SetActive(Active: boolean)
+        Skin.Active = Active == true
+        Refresh()
+    end
+
+    function Skin:SetHover(Hovered: boolean)
+        Skin.Hovered = Hovered == true
+        if not Skin.Active then
+            Refresh()
+        end
+    end
+
+    function Skin:SetCompact(Compact: boolean)
+        Compact = Compact == true
+        if Skin.Compact == Compact then
+            return
+        end
+        Skin.Compact = Compact
+        Refresh()
+    end
+
+    Library.TabSkins[Button] = Skin
+    Refresh()
+
+    return Skin
 end
 
 function Library:AddOutline(Frame: GuiObject)
@@ -16247,11 +16362,12 @@ function Library:CreateWindow(WindowInfo)
             end
 
             Button.Label.Visible = not IsCompact
-            Button.Padding.PaddingBottom = UDim.new(0, IsCompact and 6 or 11)
-            Button.Padding.PaddingLeft = UDim.new(0, IsCompact and 6 or 12)
-            Button.Padding.PaddingRight = UDim.new(0, IsCompact and 6 or 12)
-            Button.Padding.PaddingTop = UDim.new(0, IsCompact and 6 or 11)
+            Button.Padding.PaddingBottom = UDim.new(0, 11)
+            Button.Padding.PaddingLeft = UDim.new(0, IsCompact and 11 or 12)
+            Button.Padding.PaddingRight = UDim.new(0, IsCompact and 11 or 12)
+            Button.Padding.PaddingTop = UDim.new(0, 11)
             Button.Icon.SizeConstraint = IsCompact and Enum.SizeConstraint.RelativeXY or Enum.SizeConstraint.RelativeYY
+
 
             --// The chevron has no room compact, but the sub tabs themselves stay:
             --// their entries flip to centered icon-only rows and the list re-fits
@@ -16268,6 +16384,11 @@ function Library:CreateWindow(WindowInfo)
             if Button.RefreshSidebarList then
                 Button.RefreshSidebarList(false)
             end
+        end
+
+        --// The chip is a compact-only mark, so every skinned button is told
+        for _, Skin in Library.TabSkins do
+            Skin:SetCompact(IsCompact)
         end
 
         --// Re-open the active tab's list once the sidebar has room again
@@ -16490,7 +16611,7 @@ function Library:CreateWindow(WindowInfo)
         local TabButton: TextButton
         local TabLabel
         local TabIcon
-        local SetTabChipActive
+        local TabSkin
 
         local TabContainer
         local TabCanvas
@@ -16533,12 +16654,12 @@ function Library:CreateWindow(WindowInfo)
                 Text = "",
                 Parent = TabHolder,
             })
-            SetTabChipActive = Library:SkinTabButton(TabButton)
+            TabSkin = Library:SkinTabButton(TabButton)
             local ButtonPadding = New("UIPadding", {
-                PaddingBottom = UDim.new(0, IsCompact and 6 or 11),
-                PaddingLeft = UDim.new(0, IsCompact and 6 or 12),
-                PaddingRight = UDim.new(0, IsCompact and 6 or 12),
-                PaddingTop = UDim.new(0, IsCompact and 6 or 11),
+                PaddingBottom = UDim.new(0, 11),
+                PaddingLeft = UDim.new(0, IsCompact and 11 or 12),
+                PaddingRight = UDim.new(0, IsCompact and 11 or 12),
+                PaddingTop = UDim.new(0, 11),
                 Parent = TabButton,
             })
 
@@ -16565,6 +16686,8 @@ function Library:CreateWindow(WindowInfo)
                 })
                 Library:ApplyLucideIcon(TabIcon, Icon)
             end
+
+            TabSkin:SetIcon(TabIcon)
 
             TabButtonInfo = {
                 Label = TabLabel,
@@ -18910,6 +19033,7 @@ function Library:CreateWindow(WindowInfo)
                 return
             end
 
+            TabSkin:SetHover(Hovering)
             TweenService:Create(TabLabel, Library.TweenInfo, {
                 TextTransparency = Hovering and 0.25 or 0.5,
             }):Play()
@@ -18929,10 +19053,7 @@ function Library:CreateWindow(WindowInfo)
                 Library.ActiveTab:Hide()
             end
 
-            TweenService:Create(TabButton, Library.TweenInfo, {
-                BackgroundTransparency = 0,
-            }):Play()
-            SetTabChipActive(true)
+            TabSkin:SetActive(true)
             TweenService:Create(TabLabel, Library.TweenInfo, {
                 TextTransparency = 0,
             }):Play()
@@ -18961,10 +19082,7 @@ function Library:CreateWindow(WindowInfo)
         end
 
         function Tab:Hide()
-            TweenService:Create(TabButton, Library.TweenInfo, {
-                BackgroundTransparency = 1,
-            }):Play()
-            SetTabChipActive(false)
+            TabSkin:SetActive(false)
 
             TweenService:Create(TabLabel, Library.TweenInfo, {
                 TextTransparency = 0.5,
@@ -19115,7 +19233,7 @@ function Library:CreateWindow(WindowInfo)
         local TabButton: TextButton
         local TabLabel
         local TabIcon
-        local SetTabChipActive
+        local TabSkin
 
         local TabCanvas
         local TabContainer
@@ -19130,12 +19248,12 @@ function Library:CreateWindow(WindowInfo)
                 LayoutOrder = Order,
                 Parent = Tabs,
             })
-            SetTabChipActive = Library:SkinTabButton(TabButton)
+            TabSkin = Library:SkinTabButton(TabButton)
             local ButtonPadding = New("UIPadding", {
-                PaddingBottom = UDim.new(0, IsCompact and 6 or 11),
-                PaddingLeft = UDim.new(0, IsCompact and 6 or 12),
-                PaddingRight = UDim.new(0, IsCompact and 6 or 12),
-                PaddingTop = UDim.new(0, IsCompact and 6 or 11),
+                PaddingBottom = UDim.new(0, 11),
+                PaddingLeft = UDim.new(0, IsCompact and 11 or 12),
+                PaddingRight = UDim.new(0, IsCompact and 11 or 12),
+                PaddingTop = UDim.new(0, 11),
                 Parent = TabButton,
             })
 
@@ -19161,6 +19279,8 @@ function Library:CreateWindow(WindowInfo)
                 })
                 Library:ApplyLucideIcon(TabIcon, Icon)
             end
+
+            TabSkin:SetIcon(TabIcon)
 
             table.insert(Library.TabButtons, {
                 Label = TabLabel,
@@ -19343,6 +19463,7 @@ function Library:CreateWindow(WindowInfo)
                 return
             end
 
+            TabSkin:SetHover(Hovering)
             TweenService:Create(TabLabel, Library.TweenInfo, {
                 TextTransparency = Hovering and 0.25 or 0.5,
             }):Play()
@@ -19362,10 +19483,7 @@ function Library:CreateWindow(WindowInfo)
                 Library.ActiveTab:Hide()
             end
 
-            TweenService:Create(TabButton, Library.TweenInfo, {
-                BackgroundTransparency = 0,
-            }):Play()
-            SetTabChipActive(true)
+            TabSkin:SetActive(true)
 
             TweenService:Create(TabLabel, Library.TweenInfo, {
                 TextTransparency = 0,
@@ -19392,10 +19510,7 @@ function Library:CreateWindow(WindowInfo)
         end
 
         function Tab:Hide()
-            TweenService:Create(TabButton, Library.TweenInfo, {
-                BackgroundTransparency = 1,
-            }):Play()
-            SetTabChipActive(false)
+            TabSkin:SetActive(false)
 
             TweenService:Create(TabLabel, Library.TweenInfo, {
                 TextTransparency = 0.5,
