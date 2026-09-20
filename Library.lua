@@ -2539,21 +2539,10 @@ local SUBTAB_SLIDE_TWEEN = TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.Easi
 --// Fraction of the chip the underline spans, and its gap above the chip's bottom edge
 local SUBTAB_UNDERLINE_WIDTH = 0.66
 local SUBTAB_UNDERLINE_GAP = 3
---// A tabbox's tab strip is a segmented control: an inset track holding a chip
---// that slides behind the active tab, rather than a flex-filled row with a rule
-local TABBOX_TRACK_HEIGHT = 28
-local TABBOX_TRACK_INSET = 3
---// Gap between the track and the edge of the tabbox
-local TABBOX_TRACK_MARGIN = 6
-local TABBOX_CHIP_HEIGHT = TABBOX_TRACK_HEIGHT - TABBOX_TRACK_INSET * 2
---// Horizontal breathing room either side of a tab's label, since the tabs size
---// to their content instead of splitting the row evenly
-local TABBOX_TAB_PADDING = 14
-local TABBOX_TRACK_TRANSPARENCY = 0.7
-local TABBOX_CHIP_TRANSPARENCY = 0.9
-local TABBOX_IDLE_TRANSPARENCY = 0.5
-local TABBOX_HOVER_TRANSPARENCY = 0.94
-local TABBOX_HOVER_TEXT_TRANSPARENCY = 0.25
+--// Same idea for a tabbox's tab strip: the underline spans this fraction of the
+--// button rather than the whole flex cell, so it reads as a marker not a border
+local TABBOX_UNDERLINE_WIDTH = 0.55
+local TABBOX_UNDERLINE_MIN = 16
 --// Transparency per shadow layer, nearest the chip first
 local SUBTAB_SHADOW_TRANSPARENCY = { 0.55, 0.75 }
 --// Hover squashes the chip slightly; the button itself keeps its size so the row
@@ -16964,9 +16953,8 @@ function Library:CreateWindow(WindowInfo)
             })
 
             local TabboxHolder
-            local TabboxTrack
             local TabboxButtons
-            local TabboxChip
+            local TabboxUnderline
 
             do
                 TabboxHolder = New("Frame", {
@@ -16987,73 +16975,40 @@ function Library:CreateWindow(WindowInfo)
                     Library:AddOutline(TabboxHolder)
                 end
 
-                --// The inset track the tabs sit in. It spans the header rather than
-                --// hugging its tabs, so a long label can never push it past the box.
-                TabboxTrack = New("Frame", {
-                    BackgroundColor3 = "DarkColor",
-                    BackgroundTransparency = TABBOX_TRACK_TRANSPARENCY,
-                    ClipsDescendants = true,
-                    Position = UDim2.fromOffset(TABBOX_TRACK_MARGIN, TABBOX_TRACK_INSET),
-                    Size = UDim2.new(1, -TABBOX_TRACK_MARGIN * 2, 0, TABBOX_TRACK_HEIGHT),
+                TabboxButtons = New("Frame", {
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(1, 0, 0, 34),
                     ZIndex = 2,
                     Parent = TabboxHolder,
                 })
-                table.insert(
-                    Library.Corners,
-                    New("UICorner", {
-                        CornerRadius = UDim.new(0, WindowInfo.CornerRadius / 2),
-                        Parent = TabboxTrack,
-                    })
-                )
-                New("UIPadding", {
-                    PaddingBottom = UDim.new(0, TABBOX_TRACK_INSET),
-                    PaddingLeft = UDim.new(0, TABBOX_TRACK_INSET),
-                    PaddingRight = UDim.new(0, TABBOX_TRACK_INSET),
-                    PaddingTop = UDim.new(0, TABBOX_TRACK_INSET),
-                    Parent = TabboxTrack,
-                })
-
-                --// The chip that slides behind the active tab. It sits beside the
-                --// button row rather than inside it, so the list layout leaves it be.
-                TabboxChip = New("Frame", {
-                    BackgroundColor3 = "WhiteColor",
-                    BackgroundTransparency = TABBOX_CHIP_TRANSPARENCY,
-                    BorderSizePixel = 0,
-                    Size = UDim2.fromOffset(0, TABBOX_CHIP_HEIGHT),
-                    Visible = false,
-                    ZIndex = 2,
-                    Parent = TabboxTrack,
-                })
-                table.insert(
-                    Library.Corners,
-                    New("UICorner", {
-                        CornerRadius = UDim.new(0, WindowInfo.CornerRadius / 2),
-                        Parent = TabboxChip,
-                    })
-                )
-                New("UIStroke", {
-                    Color = "OutlineColor",
-                    Thickness = 1,
-                    Transparency = 0.4,
-                    Parent = TabboxChip,
-                })
-
-                TabboxButtons = New("Frame", {
-                    BackgroundTransparency = 1,
-                    Size = UDim2.new(1, 0, 0, TABBOX_CHIP_HEIGHT),
-                    ZIndex = 3,
-                    Parent = TabboxTrack,
-                })
                 New("UIListLayout", {
                     FillDirection = Enum.FillDirection.Horizontal,
-                    HorizontalAlignment = Enum.HorizontalAlignment.Center,
-                    VerticalAlignment = Enum.VerticalAlignment.Center,
-                    Padding = UDim.new(0, 2),
+                    HorizontalFlex = Enum.UIFlexAlignment.Fill,
                     Parent = TabboxButtons,
+                })
+
+                --// Full-width separator under the tab row (header divider)
+                Library:MakeLine(TabboxHolder, {
+                    Position = UDim2.fromOffset(0, 34),
+                    Size = UDim2.new(1, 0, 0, 1),
+                })
+
+                --// Accent underline that slides to the active tab
+                TabboxUnderline = New("Frame", {
+                    AnchorPoint = Vector2.new(0, 1),
+                    BackgroundColor3 = "AccentColor",
+                    BorderSizePixel = 0,
+                    Position = UDim2.fromOffset(0, 35),
+                    Size = UDim2.fromOffset(0, 2),
+                    Visible = false,
+                    ZIndex = 3,
+                    Parent = TabboxHolder,
                 })
             end
 
             local TotalTabs = 0
+            local FirstTab
+            local LastTab
 
             local Tabbox: any = {
                 Type = "Tabbox",
@@ -17071,22 +17026,16 @@ function Library:CreateWindow(WindowInfo)
                 ParentBox = if ParentObj.Type == "Groupbox" then ParentObj else nil,
             }
 
-            --// Slide the chip behind the given tab button. Uses the button's
-            --// laid-out rect, so it stays correct for any number of tabs, any
-            --// label width and any DPI scale.
-            local function MoveChip(Button: GuiObject, Animate: boolean, Attempt: number?)
-                if not (TabboxChip and Button) then
+            --// Slide the accent underline under the given tab button. Uses the
+            --// button's laid-out rect (flex-filled), so it stays correct for any
+            --// number of tabs and any DPI scale.
+            local function MoveUnderline(Button: GuiObject, Animate: boolean)
+                if not (TabboxUnderline and Button) then
                     return
                 end
 
-                --// A button added this frame has not been laid out yet. Give up
-                --// after a few frames so a hidden tabbox cannot defer forever.
-                if Button.AbsoluteSize.X <= 0 then
-                    local Next = (Attempt or 0) + 1
-                    if Next <= 8 then
-                        task.defer(MoveChip, Button, false, Next)
-                    end
-
+                if TabboxButtons.AbsoluteSize.X <= 0 then
+                    task.defer(MoveUnderline, Button, false)
                     return
                 end
 
@@ -17094,32 +17043,31 @@ function Library:CreateWindow(WindowInfo)
                 local RelX = (Button.AbsolutePosition.X - TabboxButtons.AbsolutePosition.X) / Scale
                 local Width = Button.AbsoluteSize.X / Scale
 
-                local GoalPos = UDim2.fromOffset(math.floor(RelX), 0)
-                local GoalSize = UDim2.fromOffset(math.floor(Width), TABBOX_CHIP_HEIGHT)
+                --// Centered under the button, a fraction of its width
+                local BarWidth = math.max(TABBOX_UNDERLINE_MIN, math.floor(Width * TABBOX_UNDERLINE_WIDTH))
+                BarWidth = math.min(BarWidth, math.floor(Width))
 
-                --// Nothing to slide from on the first show, so snap into place
-                local Snap = not Animate
-                    or not TabboxChip.Visible
-                    or not (Library.Animations and Library.Animations.SubTabUnderline ~= false)
+                local GoalPos = UDim2.fromOffset(math.floor(RelX + (Width - BarWidth) / 2), 35)
+                local GoalSize = UDim2.fromOffset(BarWidth, 2)
 
-                TabboxChip.Visible = true
-                if Snap then
-                    TabboxChip.Position = GoalPos
-                    TabboxChip.Size = GoalSize
-                else
-                    TweenService:Create(TabboxChip, SUBTAB_SLIDE_TWEEN, {
+                TabboxUnderline.Visible = true
+                if Animate and Library.Animations and Library.Animations.SubTabUnderline ~= false then
+                    TweenService:Create(TabboxUnderline, SUBTAB_SLIDE_TWEEN, {
                         Position = GoalPos,
                         Size = GoalSize,
                     }):Play()
+                else
+                    TabboxUnderline.Position = GoalPos
+                    TabboxUnderline.Size = GoalSize
                 end
             end
 
-            --// Realign the chip when the row is resized (DPI, width, pop-out)
+            --// Realign the underline when the row is resized (DPI, width, pop-out)
             table.insert(
                 Tabbox.Connections,
                 TabboxButtons:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
                     if Tabbox.ActiveTab then
-                        MoveChip(Tabbox.ActiveTab.ButtonHolder, false)
+                        MoveUnderline(Tabbox.ActiveTab.ButtonHolder, false)
                     end
                 end)
             )
@@ -17140,29 +17088,36 @@ function Library:CreateWindow(WindowInfo)
                 TotalTabs = TotalTabs + 1
                 local TabIndex = TotalTabs
 
+                LastTab = TabIndex
+                if not FirstTab then
+                    FirstTab = TabIndex
+                end
+
                 local IsNameEmpty = Name == nil or Trim(tostring(Name)) == ""
                 local TabStoringIndex = IsNameEmpty and tostring(TabIndex) or Name
 
-                --// Sized to its own label rather than an even share of the row,
-                --// with the hover wash riding on the button itself
                 local Button = New("TextButton", {
-                    AutomaticSize = Enum.AutomaticSize.X,
-                    BackgroundColor3 = "WhiteColor",
                     BackgroundTransparency = 1,
-                    Size = UDim2.fromOffset(0, TABBOX_CHIP_HEIGHT),
+                    Size = UDim2.fromOffset(0, 34),
                     Text = "",
-                    ZIndex = 3,
+                    ZIndex = 2,
                     Parent = TabboxButtons,
                 })
 
                 local ButtonCorner = New("UICorner", {
-                    CornerRadius = UDim.new(0, WindowInfo.CornerRadius / 2),
+                    TopLeftRadius = UDim.new(0, WindowInfo.CornerRadius),
+                    TopRightRadius = UDim.new(0, WindowInfo.CornerRadius),
+                    BottomRightRadius = UDim.new(0, 0),
+                    BottomLeftRadius = UDim.new(0, 0),
                     Parent = Button,
-                }); table.insert(Library.Corners, ButtonCorner)
+                }); table.insert(Library.SpecificCorners, ButtonCorner)
 
-                New("UIPadding", {
-                    PaddingLeft = UDim.new(0, TABBOX_TAB_PADDING),
-                    PaddingRight = UDim.new(0, TABBOX_TAB_PADDING),
+                local ButtonContent = New("Frame", {
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    BackgroundTransparency = 1,
+                    Position = UDim2.fromScale(0.5, 0.5),
+                    Size = UDim2.fromOffset(0, 16),
                     Parent = Button,
                 })
                 New("UIListLayout", {
@@ -17170,7 +17125,7 @@ function Library:CreateWindow(WindowInfo)
                     HorizontalAlignment = Enum.HorizontalAlignment.Center,
                     VerticalAlignment = Enum.VerticalAlignment.Center,
                     Padding = UDim.new(0, 8),
-                    Parent = Button,
+                    Parent = ButtonContent,
                 })
 
                 local ButtonIcon
@@ -17178,9 +17133,9 @@ function Library:CreateWindow(WindowInfo)
                 if BoxIcon then
                     ButtonIcon = New("ImageLabel", {
                         ImageColor3 = BoxIcon.Custom and "WhiteColor" or "AccentColor",
-                        ImageTransparency = TABBOX_IDLE_TRANSPARENCY,
+                        ImageTransparency = 0.5,
                         Size = IsNameEmpty and UDim2.fromOffset(16, 16) or UDim2.fromOffset(18, 18),
-                        Parent = Button,
+                        Parent = ButtonContent,
                     })
                     Library:ApplyLucideIcon(ButtonIcon, BoxIcon)
                 end
@@ -17193,8 +17148,8 @@ function Library:CreateWindow(WindowInfo)
                         Size = UDim2.fromOffset(0, 16),
                         Text = Name,
                         TextSize = 15,
-                        TextTransparency = TABBOX_IDLE_TRANSPARENCY,
-                        Parent = Button,
+                        TextTransparency = 0.5,
+                        Parent = ButtonContent,
                     })
                 end
 
@@ -17237,71 +17192,26 @@ function Library:CreateWindow(WindowInfo)
                     DependencyBoxes = {},
                 }
 
-                --// Hover feedback. The active tab always reads at full strength, so
-                --// hovering it changes nothing; an inactive one lifts under the cursor.
-                local Hovered = false
-                local function RefreshHover(Animate: boolean?)
-                    local IsActive = Tabbox.ActiveTab == Tab
-                    local Wash = (Hovered and not IsActive) and TABBOX_HOVER_TRANSPARENCY or 1
-                    local Ink = IsActive and 0
-                        or (Hovered and TABBOX_HOVER_TEXT_TRANSPARENCY or TABBOX_IDLE_TRANSPARENCY)
-
-                    if Animate == false then
-                        Button.BackgroundTransparency = Wash
-                        if ButtonLabel then
-                            ButtonLabel.TextTransparency = Ink
-                        end
-                        if ButtonIcon then
-                            ButtonIcon.ImageTransparency = Ink
-                        end
-
-                        return
-                    end
-
-                    TweenService:Create(Button, Library.TweenInfo, {
-                        BackgroundTransparency = Wash,
-                    }):Play()
-                    if ButtonLabel then
-                        TweenService:Create(ButtonLabel, Library.TweenInfo, {
-                            TextTransparency = Ink,
-                        }):Play()
-                    end
-                    if ButtonIcon then
-                        TweenService:Create(ButtonIcon, Library.TweenInfo, {
-                            ImageTransparency = Ink,
-                        }):Play()
-                    end
-                end
-
-                table.insert(
-                    Tab.Connections,
-                    Button.MouseEnter:Connect(function()
-                        Hovered = true
-                        RefreshHover()
-                    end)
-                )
-                table.insert(
-                    Tab.Connections,
-                    Button.MouseLeave:Connect(function()
-                        Hovered = false
-                        RefreshHover()
-                    end)
-                )
-
                 function Tab:Show()
                     local PreviousActive = Tabbox.ActiveTab
                     if PreviousActive and PreviousActive ~= Tab then
                         PreviousActive:Hide()
                     end
 
+                    if ButtonLabel then
+                        ButtonLabel.TextTransparency = 0
+                    end
+                    if ButtonIcon then
+                        ButtonIcon.ImageTransparency = 0
+                    end
+
                     Container.Visible = true
 
                     Tabbox.ActiveTab = Tab
-                    RefreshHover()
                     Tab:Resize()
 
-                    --// Slide the chip behind this tab
-                    MoveChip(Button, true)
+                    --// Slide the underline to this tab
+                    MoveUnderline(Button, true)
 
                     --// Smooth content switch: slide the container up into place.
                     --// Only on a real switch, so the initial build doesn't jump.
@@ -17320,13 +17230,17 @@ function Library:CreateWindow(WindowInfo)
                 end
 
                 function Tab:Hide()
+                    if ButtonLabel then
+                        ButtonLabel.TextTransparency = 0.5
+                    end
+                    if ButtonIcon then
+                        ButtonIcon.ImageTransparency = 0.5
+                    end
                     Container.Visible = false
 
                     if Tabbox.ActiveTab == Tab then
                         Tabbox.ActiveTab = nil
                     end
-
-                    RefreshHover()
                 end
 
                 function Tab:Resize()
@@ -17344,13 +17258,15 @@ function Library:CreateWindow(WindowInfo)
                         ParentObj:Resize()
                     end
 
-                    --// Keep the chip aligned after reflows (e.g. search hides tabs)
-                    MoveChip(Button, false)
+                    --// Keep the underline aligned after reflows (e.g. search hides tabs)
+                    MoveUnderline(Button, false)
                 end
 
                 function Tab:UpdateCorners()
-                    --// Every tab is its own chip now, so they all round the same way
-                    ButtonCorner.CornerRadius = UDim.new(0, WindowInfo.CornerRadius / 2)
+                    local Radius = WindowInfo.CornerRadius
+
+                    ButtonCorner.TopLeftRadius = UDim.new(0, TabIndex == FirstTab and Radius or 0)
+                    ButtonCorner.TopRightRadius = UDim.new(0, TabIndex == LastTab and Radius or 0)
                 end
 
                 function Tab:Destroy()
@@ -17392,14 +17308,14 @@ function Library:CreateWindow(WindowInfo)
 
                 setmetatable(Tab, BaseGroupbox)
 
-                --// Adding a tab reflows the track, so the existing buttons shift.
-                --// Without this the chip would sit at the old rect until the user
-                --// switched tabs.
+                --// Adding a tab re-flexes the row, so every button shrinks while
+                --// the row itself keeps its width. Without this the underline would
+                --// keep the first tab's full-row width until the user switched tabs.
                 table.insert(
                     Tab.Connections,
                     Button:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
                         if Tabbox.ActiveTab == Tab then
-                            MoveChip(Tab.ButtonHolder, false)
+                            MoveUnderline(Tab.ButtonHolder, false)
                         end
                     end)
                 )
@@ -17407,7 +17323,7 @@ function Library:CreateWindow(WindowInfo)
                     Tab.Connections,
                     Button:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
                         if Tabbox.ActiveTab == Tab then
-                            MoveChip(Tab.ButtonHolder, false)
+                            MoveUnderline(Tab.ButtonHolder, false)
                         end
                     end)
                 )
@@ -17416,7 +17332,7 @@ function Library:CreateWindow(WindowInfo)
                     local ActiveButton = Tabbox.ActiveTab.ButtonHolder
                     task.defer(function()
                         if not Tabbox.Destroyed then
-                            MoveChip(ActiveButton, false)
+                            MoveUnderline(ActiveButton, false)
                         end
                     end)
                 end
