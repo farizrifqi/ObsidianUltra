@@ -10,8 +10,8 @@
   both: the incoming pair enters from the side the previous tab sits on while it
   fades in, and the outgoing pair leaves towards the new one as it fades out, so the
   mark reads as being carried down the column rather than blinking from place to
-  place. Hovering an inactive glyph fades the chip in
-  faintly, and switching tabs grows the chip from 24px. Expanding the sidebar brings
+  place. Hovering an inactive glyph raises a plain light
+  well rather than a faint accent chip, and switching tabs grows the chip from 24px. Expanding the sidebar brings
   the labels back and drops both: a row with a label is a row, not a chip, so the
   button returns to the plain full-width card.
 * Compact glyphs sit at 18px (padding 6 -> 11) so they read inside the chip.
@@ -19,6 +19,9 @@
   compact widths were nudged up to keep the buttons the same size inside it.
 
 [fixes]
+* A chip that had slid away on a tab switch stayed offset, so it was drawn crooked in
+  its own button the next time it was hovered. The pair is now put back once the
+  slide has finished and it is out of sight.
 * Compact chips no longer stay lit as a hover after being selected: Tab:Hover returns
   early while a tab is the open one, so a tab clicked with the pointer on it was never
   told the pointer left and lit back up the moment it was deselected. The chip now

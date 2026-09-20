@@ -2547,6 +2547,28 @@ function Library:SkinTabButton(Button: TextButton)
         Parent = Chip,
     })
 
+    --// Hover is not a weak version of selection. Fading the accent chip up at a
+    --// fraction of its strength turns it the colour of the accent mixed into the
+    --// sidebar -- muddy at every accent, and readable as "half selected". A hover
+    --// gets its own well instead: the same square, tinted with plain light, which
+    --// says the pointer is here and nothing about what is open.
+    local Well = New("Frame", {
+        Active = false,
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundColor3 = "WhiteColor",
+        BackgroundTransparency = 1,
+        Name = "TabWell",
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(TAB_CHIP_REST_SIZE, TAB_CHIP_REST_SIZE),
+        Visible = false,
+        ZIndex = 0,
+        Parent = Button,
+    })
+    New("UICorner", {
+        CornerRadius = UDim.new(0, TAB_CHIP_RADIUS),
+        Parent = Well,
+    })
+
     local Rim = New("UIStroke", {
         Color = "WhiteColor",
         Thickness = 1,
@@ -2620,18 +2642,21 @@ function Library:SkinTabButton(Button: TextButton)
     --// tab the selection is coming from or going to, so it has somewhere to travel
     --// from and somewhere to leave towards. Zero until a switch says otherwise.
     local Travel = 0
+    --// Counts departures so a late reset cannot land on a newer one
+    local Departure = 0
 
     local function Refresh(Instant: boolean?)
         --// Compact: the chip carries the state and the button stays transparent.
         --// Expanded: no chip, and the button is the card it always was.
-        local ChipFill = if not Skin.Compact
-            then 1
-            elseif Skin.Active then 0
-            elseif Skin.Hovered then 0.88
-            else 1
+        local ChipFill = (Skin.Compact and Skin.Active) and 0 or 1
 
         --// The open tab's pair always settles home; everyone else's waits offset
         local Offset = Skin.Active and 0 or Travel
+
+        Well.Visible = Skin.Compact
+        TweenService:Create(Well, Library.TweenInfo, {
+            BackgroundTransparency = (Skin.Compact and Skin.Hovered and not Skin.Active) and 0.92 or 1,
+        }):Play()
 
         Chip.Visible = Skin.Compact
         if Instant then
@@ -2698,6 +2723,19 @@ function Library:SkinTabButton(Button: TextButton)
     function Skin:Depart(Direction: number)
         Travel = TAB_MARKER_TRAVEL * Direction
         Refresh()
+
+        --// Left where it landed, an offset pair is a chip sitting crooked in its own
+        --// button, which is what the next hover would show. It is invisible by the
+        --// time the slide ends, so that is when it is put back, without a tween.
+        Departure += 1
+        local Trip = Departure
+        task.delay(TAB_TRAVEL_TWEEN.Time, function()
+            if Trip ~= Departure or Skin.Active or not Button.Parent then
+                return
+            end
+            Travel = 0
+            Refresh(true)
+        end)
     end
 
     function Skin:SetActive(Active: boolean)
@@ -2708,6 +2746,8 @@ function Library:SkinTabButton(Button: TextButton)
         --// hover is dropped here rather than relied upon to arrive later.
         if Skin.Active then
             Skin.Hovered = false
+            --// Any reset still queued from an earlier departure is not wanted now
+            Departure += 1
         end
 
         if not Skin.Active then
