@@ -2467,8 +2467,8 @@ end
 --//
 --// Expanding the sidebar puts the labels back, and a row with a label is a row, not
 --// a chip: the chip is dropped and the button returns to the plain full-width card.
-local TAB_CHIP_SIZE = 32
-local TAB_CHIP_REST_SIZE = 26
+local TAB_CHIP_SIZE = 30
+local TAB_CHIP_REST_SIZE = 24
 local TAB_CHIP_RADIUS = 9
 local TAB_BAR_RADIUS = 8
 
@@ -2476,8 +2476,17 @@ local TAB_BAR_RADIUS = 8
 --// by so it lands on the sidebar's own edge rather than the list's
 local TAB_LIST_GUTTER = 6
 local TAB_MARKER_WIDTH = 3
-local TAB_MARKER_HEIGHT = 16
-local TAB_MARKER_REST_HEIGHT = 8
+local TAB_MARKER_HEIGHT = 22
+local TAB_MARKER_REST_HEIGHT = 10
+
+--// The marker is a lit bar, not a dash: both tips give up a little of the fill so
+--// it reads as brightest at its middle and tapers away, instead of ending twice in
+--// a hard cap the chip's own edge then has to compete with.
+local TAB_MARKER_TAPER = NumberSequence.new({
+    NumberSequenceKeypoint.new(0, 0.55),
+    NumberSequenceKeypoint.new(0.5, 0),
+    NumberSequenceKeypoint.new(1, 0.55),
+})
 
 local TAB_CHIP_SHADE = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
@@ -2556,6 +2565,11 @@ function Library:SkinTabButton(Button: TextButton)
     })
     New("UICorner", {
         CornerRadius = UDim.new(1, 0),
+        Parent = Marker,
+    })
+    New("UIGradient", {
+        Rotation = 90,
+        Transparency = TAB_MARKER_TAPER,
         Parent = Marker,
     })
 

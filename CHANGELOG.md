@@ -3,11 +3,11 @@
 ```diff
 [changes]
 * Compact sidebar tabs are now dock chips: while the sidebar is compact, the open
-  tab's glyph sits on a 32px accent-filled rounded square (a white-to-grey gradient
+  tab's glyph sits on a 30px accent-filled rounded square (a white-to-grey gradient
   over the accent, plus a white top rim) and flips to black or white -- whichever
-  reads against the accent. A short accent marker sits hard against the sidebar's
-  left edge, level with the chip. Hovering an inactive glyph fades the chip in
-  faintly, and switching tabs grows the chip from 26px. Expanding the sidebar brings
+  reads against the accent. A 3x22 accent marker sits hard against the sidebar's
+  left edge, level with the chip, tapering away at both tips. Hovering an inactive glyph fades the chip in
+  faintly, and switching tabs grows the chip from 24px. Expanding the sidebar brings
   the labels back and drops both: a row with a label is a row, not a chip, so the
   button returns to the plain full-width card.
 * Compact glyphs sit at 18px (padding 6 -> 11) so they read inside the chip.
