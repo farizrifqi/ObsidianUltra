@@ -81,38 +81,8 @@ Library:CreateWindow({
 Window:SetSidebarWidth(px) / :GetSidebarWidth() / :SetCompact(bool) / :IsSidebarCompacted()
 ```
 
-Compact = icons only (title, rule, tab labels, chevrons hidden). Live flag:
+Compact = icons only (title, tab labels, chevrons hidden). Live flag:
 `Library.SidebarCompacted`. Separate from Minimize (which collapses the whole window).
-
-The sidebar is a card floating in the content band, not a slab on the window edge:
-it has its own surface, radius and outline, with an even gutter on both sides. The
-header above it is a left-aligned lockup — mark in a rounded well, hairline rule,
-wordmark — and the rail/page seam starts below the header rather than cutting it.
-
-### Sidebar profile card
-
-A pinned identity card at the foot of the rail. On by default, showing the local
-player; compact collapses it to the avatar alone.
-
-```lua
-Library:CreateWindow({
-    Profile = true,             -- DEFAULT: fills itself in from the local player
-    ProfileRole = "Player",     -- the role line when the profile does not set one
-})
-
--- Or give the fields outright. Also accepts a Player, a UserId, a name string,
--- or false to hide the card and hand the whole rail to the tab list.
-Library:CreateWindow({
-    Profile = { Player = LocalPlayer, Role = "Owner" },
-})
-
-Window:SetProfile({ Name = "Burger", Role = "Owner", Image = "user" })
-Window:SetProfile(false)        -- hide it
-Window:GetProfile()             -- { Name, Role, Image, UserId, Player } or nil
-```
-
-`Image` takes a named Lucide icon, an asset URL, or nothing — with nothing, the
-avatar falls back to the user's Roblox thumbnail (`Thumbnail` picks which type).
 
 ## Tooltips
 

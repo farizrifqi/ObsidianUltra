@@ -1190,25 +1190,6 @@ export type Dialog = {
 }
 
 
---// The identity card pinned to the foot of the sidebar. `true` fills itself in
---// from the local player; `false` or nil hides the card entirely.
-export type WindowProfile = boolean | string | number | Player | {
-    Name: string?,
-    Role: string?,
-    Image: string?,
-    UserId: number?,
-    Player: Player?,
-    Thumbnail: string?,
-}
-
-export type WindowProfileInfo = {
-    Name: string,
-    Role: string,
-    Image: string?,
-    UserId: number?,
-    Player: Player?,
-}
-
 export type Window = {
     AlwaysOnTop: boolean,
     Snapping: boolean?,
@@ -1216,8 +1197,6 @@ export type Window = {
     GetSidebarWidth: (self: Window) -> number,
     SetSidebarWidth: (self: Window, Width: number) -> (),
     SetCompact: (self: Window, State: boolean) -> (),
-    SetProfile: (self: Window, Info: WindowProfile) -> WindowProfileInfo?,
-    GetProfile: (self: Window) -> WindowProfileInfo?,
     ShowTabInfo: (self: Window, Name: string, Description: string) -> (),
     HideTabInfo: (self: Window) -> (),
     AddTab: (
@@ -1537,8 +1516,6 @@ export type Library = {
             MinimizedWidth: number?,
             MinimizedSubtitle: string?,
             AutoMinimize: boolean?,
-            Profile: WindowProfile?,
-            ProfileRole: string?,
             CornerRadius: number?,
             NotifySide: "Left" | "Right"?,
             DisableNotificationBell: boolean?,

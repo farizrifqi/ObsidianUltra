@@ -461,13 +461,6 @@ local Templates = {
         MinimizedSubtitle = "",
         AutoMinimize = false,
 
-        --// Sidebar identity card \\--
-        --// true fills itself in from the local player; a table gives the fields
-        --// outright ({ Name, Role, Image, UserId, Player }); false or nil hides it
-        --// and hands the whole rail back to the tab list.
-        Profile = true,
-        ProfileRole = "Player",
-
         CornerRadius = 4,
         NotifySide = "Right",
         DisableNotificationBell = false,
@@ -2486,47 +2479,6 @@ local TAB_MARKER_WIDTH = 3
 local TAB_MARKER_HEIGHT = 22
 local TAB_MARKER_REST_HEIGHT = 10
 
---// Sidebar shell.
---//
---// The tab column is not a slab against the window's left edge any more: it is a
---// card floating in the content band, with air on every side and its own outline.
---// Giving the column a border of its own is what lets the window read as two
---// surfaces -- a rail and a page -- rather than one pane split by a hairline.
---//
---// SIDEBAR_INSET is the air between the card and everything around it. The card
---// stops that far short of the resize divider too, so the gutter reads the same on
---// both sides and the divider is a seam between two panels, not the card's edge.
-local SIDEBAR_INSET = 8
-local SIDEBAR_RADIUS = 10
-
---// The identity card pinned to the foot of the rail. Fixed heights rather than
---// AutomaticSize: the tab list above it is sized against this number, and a card
---// that resized itself would make the list jitter on every avatar load.
-local PROFILE_HEIGHT = 52
-local PROFILE_COMPACT_HEIGHT = 40
-local PROFILE_AVATAR = 28
-local PROFILE_COMPACT_AVATAR = 26
-
---// The header's own furniture: the mark sits in a rounded well at the far left,
---// then a hairline rule, then the title. The rule is what stops the mark and the
---// wordmark reading as one lockup -- they are two things that happen to share a bar.
-local HEADER_MARK_SIZE = 28
-local HEADER_RULE_HEIGHT = 18
-local HEADER_LEFT_PAD = 10
-
---// The rail card, the identity card and the mark's well are all nested inside the
---// window, and a nested corner has to be rounder than the one outside it or the
---// two arcs read as concentric mistakes. They track the window's radius rather
---// than matching it -- and a squared window squares all three, so "radius 0" still
---// means one thing everywhere.
-local function PanelRadius(WindowRadius: number): number
-    return WindowRadius > 0 and math.clamp(WindowRadius + 6, 6, SIDEBAR_RADIUS + 8) or 0
-end
-
-local function MarkRadius(WindowRadius: number): number
-    return WindowRadius > 0 and math.clamp(WindowRadius + 4, 4, 14) or 0
-end
-
 --// The marker is a lit bar, not a dash: both tips give up a little of the fill so
 --// it reads as brightest at its middle and tapers away, instead of ending twice in
 --// a hard cap the chip's own edge then has to compete with.
@@ -2615,17 +2567,6 @@ function Library:SkinTabButton(Button: TextButton)
     New("UICorner", {
         CornerRadius = UDim.new(0, TAB_CHIP_RADIUS),
         Parent = Well,
-    })
-
-    --// Expanded, the open tab is a filled card sitting on the rail -- which is now
-    --// a raised surface itself, so fill alone no longer does all the separating. A
-    --// hairline round the card seals it against the rail the way the rail is
-    --// sealed against the window.
-    local CardRim = New("UIStroke", {
-        Color = "OutlineColor",
-        Thickness = 1,
-        Transparency = 1,
-        Parent = Button,
     })
 
     local Rim = New("UIStroke", {
@@ -2758,12 +2699,8 @@ function Library:SkinTabButton(Button: TextButton)
             ),
         }):Play()
 
-        local Card = not Skin.Compact and Skin.Active
         TweenService:Create(Button, Library.TweenInfo, {
-            BackgroundTransparency = Card and 0 or 1,
-        }):Play()
-        TweenService:Create(CardRim, Library.TweenInfo, {
-            Transparency = Card and 0.35 or 1,
+            BackgroundTransparency = (not Skin.Compact and Skin.Active) and 0 or 1,
         }):Play()
 
         ApplyIcon()
@@ -14886,24 +14823,8 @@ function Library:CreateWindow(WindowInfo)
     local MainFrame
     local DividerLine
     local TitleHolder
-    local TitlePadding
-    local TitleRule
     local WindowTitle
     local WindowIcon
-    local IconWell
-    local SidebarPanel
-    local SidebarStroke
-    local SidebarCorner
-    local ProfileCorner
-    local IconWellCorner
-    local ProfileCard
-    local ProfileAvatar
-    local ProfileText
-    local ProfileName
-    local ProfileRole
-    local ProfileInfo
-    local ApplyProfile
-    local LayoutSidebar
     local RightWrapper
     local SearchBox
     local CurrentTabInfo
@@ -14937,9 +14858,6 @@ function Library:CreateWindow(WindowInfo)
     local InitialLeftWidth = math.ceil(WindowInfo.Size.X.Offset * 0.3)
     local IsCompact = WindowInfo.SidebarCompacted
     local LastExpandedWidth = InitialLeftWidth
-    --// The rail's own width. The tab list fills the rail card now, so it can no
-    --// longer be read back off the list's size -- it is tracked here instead.
-    local CurrentSidebarWidth = InitialLeftWidth
     local Minimized = false
     local ApplyWindowVisibility
 
@@ -14995,13 +14913,10 @@ function Library:CreateWindow(WindowInfo)
             Size = UDim2.new(1, 0, 0, 1),
         })
 
-        --// The seam between rail and page. It starts under the header rule rather
-        --// than at the window's top: the header is one bar across both panels, and
-        --// running the seam up through it would cut the bar in half.
         DividerLine = New("Frame", {
             BackgroundColor3 = "OutlineColor",
-            Position = UDim2.fromOffset(InitialLeftWidth, 49),
-            Size = UDim2.new(0, 1, 1, -70),
+            Position = UDim2.fromOffset(InitialLeftWidth, 0),
+            Size = UDim2.new(0, 1, 1, -21),
             Parent = MainFrame,
             ZIndex = 2
         })
@@ -15066,9 +14981,6 @@ function Library:CreateWindow(WindowInfo)
         Library:MakeDraggable(MainFrame, TopBar, false, true, WindowSnapConfig)
 
         --// Title \\--
-        --// The header is a left-aligned lockup, not a centred one: mark, hairline
-        --// rule, wordmark, all hard against the window's left edge so the eye finds
-        --// the same origin in the header that it finds in the rail below it.
         TitleHolder = New("Frame", {
             BackgroundTransparency = 1,
             Size = UDim2.new(0, InitialLeftWidth, 1, 0),
@@ -15076,93 +14988,44 @@ function Library:CreateWindow(WindowInfo)
         })
         New("UIListLayout", {
             FillDirection = Enum.FillDirection.Horizontal,
-            HorizontalAlignment = Enum.HorizontalAlignment.Left,
+            HorizontalAlignment = Enum.HorizontalAlignment.Center,
             VerticalAlignment = Enum.VerticalAlignment.Center,
-            SortOrder = Enum.SortOrder.LayoutOrder,
-            Padding = UDim.new(0, 10),
+            Padding = UDim.new(0, 6),
             Parent = TitleHolder,
-        })
-        TitlePadding = New("UIPadding", {
-            PaddingLeft = UDim.new(0, HEADER_LEFT_PAD + SIDEBAR_INSET),
-            PaddingRight = UDim.new(0, 8),
-            Parent = TitleHolder,
-        })
-
-        --// The mark gets a well of its own so it is a badge rather than a loose
-        --// glyph. An icon-less window still gets the well, carrying the initial.
-        IconWell = New("Frame", {
-            BackgroundColor3 = "MainColor",
-            LayoutOrder = 0,
-            Size = UDim2.fromOffset(HEADER_MARK_SIZE, HEADER_MARK_SIZE),
-            Parent = TitleHolder,
-        })
-        --// The shell's furniture keeps its own rounding rather than joining
-        --// Library.Corners, which forces every member to the window's exact
-        --// radius. These three track that radius instead of matching it: the mark
-        --// well is a touch softer than the window, and the two cards softer again.
-        IconWellCorner = New("UICorner", {
-            CornerRadius = UDim.new(0, MarkRadius(WindowInfo.CornerRadius)),
-            Parent = IconWell,
-        })
-        New("UIStroke", {
-            Color = "OutlineColor",
-            Thickness = 1,
-            Transparency = 0.35,
-            Parent = IconWell,
         })
 
         if WindowInfo.Icon then
             local Icon = Library:GetCustomIcon(WindowInfo.Icon)
             WindowIcon = New("ImageLabel", {
-                AnchorPoint = Vector2.new(0.5, 0.5),
-                Position = UDim2.fromScale(0.5, 0.5),
-                ScaleType = Enum.ScaleType.Fit,
-                --// The well is the fixed thing; the configured icon size only gets
-                --// to shrink the glyph inside it, never to burst it
-                Size = UDim2.fromOffset(
-                    math.min(WindowInfo.IconSize.X.Offset, HEADER_MARK_SIZE - 11),
-                    math.min(WindowInfo.IconSize.Y.Offset, HEADER_MARK_SIZE - 11)
-                ),
-                Parent = IconWell,
+                Size = WindowInfo.IconSize,
+                Parent = TitleHolder,
             })
             if Icon then
                 Library:ApplyLucideIcon(WindowIcon, Icon)
             end
         else
             WindowIcon = New("TextLabel", {
-                AnchorPoint = Vector2.new(0.5, 0.5),
                 BackgroundTransparency = 1,
-                Position = UDim2.fromScale(0.5, 0.5),
-                Size = UDim2.fromOffset(18, 18),
-                Text = WindowInfo.Title:sub(1, 1):upper(),
+                Size = WindowInfo.IconSize,
+                Text = WindowInfo.Title:sub(1, 1),
                 TextScaled = true,
-                Parent = IconWell,
+                Visible = false,
+                Parent = TitleHolder,
             })
         end
 
-        --// The rule keeps the mark and the wordmark from fusing into one lockup
-        TitleRule = New("Frame", {
-            BackgroundColor3 = "OutlineColor",
-            LayoutOrder = 1,
-            Size = UDim2.fromOffset(1, HEADER_RULE_HEIGHT),
-            Parent = TitleHolder,
-        })
-
+        local X = Library:GetTextBounds(
+            WindowInfo.Title,
+            Library.Scheme.Font,
+            20,
+            TitleHolder.AbsoluteSize.X - (WindowInfo.Icon and WindowInfo.IconSize.X.Offset + 6 or 0) - 12
+        )
         WindowTitle = New("TextLabel", {
             BackgroundTransparency = 1,
-            LayoutOrder = 2,
-            Size = UDim2.new(1, 0, 1, 0),
+            Size = UDim2.new(0, X, 1, 0),
             Text = WindowInfo.Title,
-            TextSize = 17,
-            TextTruncate = Enum.TextTruncate.AtEnd,
-            TextXAlignment = Enum.TextXAlignment.Left,
+            TextSize = 20,
             Parent = TitleHolder,
-        })
-        --// Shrink rather than grow: the wordmark gives up width to the rail before
-        --// it pushes the mark or the rule out of the header
-        New("UIFlexItem", {
-            FlexMode = Enum.UIFlexMode.Shrink,
-            Parent = WindowTitle,
         })
 
         --// Top Right Bar \\--
@@ -16044,38 +15907,15 @@ function Library:CreateWindow(WindowInfo)
             Library:ApplyLucideIcon(WindowResizeIcon, ResizeIcon)
         end
 
-        --// Sidebar \\--
-        --// The rail is a card in the content band rather than a slab on the
-        --// window's edge, so it gets a surface, a radius and an outline of its own.
-        SidebarPanel = New("Frame", {
-            BackgroundColor3 = function()
-                return Library:GetBetterColor(Library.Scheme.BackgroundColor, 2)
-            end,
-            Name = "Sidebar",
-            Position = UDim2.fromOffset(SIDEBAR_INSET, 49 + SIDEBAR_INSET),
-            Size = UDim2.new(0, InitialLeftWidth - SIDEBAR_INSET * 2, 1, -70 - SIDEBAR_INSET * 2),
-            Parent = MainFrame,
-        })
-        SidebarCorner = New("UICorner", {
-            CornerRadius = UDim.new(0, PanelRadius(WindowInfo.CornerRadius)),
-            Parent = SidebarPanel,
-        })
-        SidebarStroke = New("UIStroke", {
-            Color = "OutlineColor",
-            Thickness = 1,
-            Transparency = 0.25,
-            Parent = SidebarPanel,
-        })
-
         --// Tabs \\--
         Tabs = New("ScrollingFrame", {
             AutomaticCanvasSize = Enum.AutomaticSize.Y,
-            BackgroundTransparency = 1,
+            BackgroundColor3 = "BackgroundColor",
             CanvasSize = UDim2.fromScale(0, 0),
-            Position = UDim2.fromOffset(0, 0),
+            Position = UDim2.fromOffset(0, 49),
             ScrollBarThickness = 0,
-            Size = UDim2.new(1, 0, 1, -(PROFILE_HEIGHT + 12)),
-            Parent = SidebarPanel,
+            Size = UDim2.new(0, InitialLeftWidth, 1, -70),
+            Parent = MainFrame,
         })
         New("UIListLayout", {
             Padding = UDim.new(0, 4),
@@ -16087,104 +15927,6 @@ function Library:CreateWindow(WindowInfo)
             PaddingRight = UDim.new(0, 6),
             PaddingTop = UDim.new(0, 6),
             Parent = Tabs,
-        })
-
-        --// Profile \\--
-        --// The foot of the rail answers "who is this", which is the one question
-        --// the tab list never answers. It is pinned, not scrolled: it belongs to
-        --// the rail, not to the list of places the rail can take you.
-        ProfileCard = New("Frame", {
-            AnchorPoint = Vector2.new(0.5, 1),
-            BackgroundColor3 = function()
-                return Library:GetBetterColor(Library.Scheme.BackgroundColor, 6)
-            end,
-            Name = "Profile",
-            Position = UDim2.new(0.5, 0, 1, -6),
-            Size = UDim2.new(1, -12, 0, PROFILE_HEIGHT),
-            Visible = false,
-            Parent = SidebarPanel,
-        })
-        ProfileCorner = New("UICorner", {
-            CornerRadius = UDim.new(0, PanelRadius(WindowInfo.CornerRadius) - 2),
-            Parent = ProfileCard,
-        })
-        New("UIStroke", {
-            Color = "OutlineColor",
-            Thickness = 1,
-            Transparency = 0.45,
-            Parent = ProfileCard,
-        })
-        New("UIPadding", {
-            PaddingLeft = UDim.new(0, 8),
-            PaddingRight = UDim.new(0, 8),
-            Parent = ProfileCard,
-        })
-        New("UIListLayout", {
-            FillDirection = Enum.FillDirection.Horizontal,
-            HorizontalAlignment = Enum.HorizontalAlignment.Left,
-            VerticalAlignment = Enum.VerticalAlignment.Center,
-            SortOrder = Enum.SortOrder.LayoutOrder,
-            Padding = UDim.new(0, 9),
-            Parent = ProfileCard,
-        })
-
-        ProfileAvatar = New("ImageLabel", {
-            BackgroundColor3 = "MainColor",
-            LayoutOrder = 0,
-            ScaleType = Enum.ScaleType.Crop,
-            Size = UDim2.fromOffset(PROFILE_AVATAR, PROFILE_AVATAR),
-            Parent = ProfileCard,
-        })
-        New("UICorner", {
-            CornerRadius = UDim.new(1, 0),
-            Parent = ProfileAvatar,
-        })
-        New("UIStroke", {
-            Color = "OutlineColor",
-            Thickness = 1,
-            Transparency = 0.4,
-            Parent = ProfileAvatar,
-        })
-
-        ProfileText = New("Frame", {
-            BackgroundTransparency = 1,
-            LayoutOrder = 1,
-            Size = UDim2.new(1, -(PROFILE_AVATAR + 9), 1, 0),
-            Parent = ProfileCard,
-        })
-        New("UIFlexItem", {
-            FlexMode = Enum.UIFlexMode.Shrink,
-            Parent = ProfileText,
-        })
-        New("UIListLayout", {
-            FillDirection = Enum.FillDirection.Vertical,
-            HorizontalAlignment = Enum.HorizontalAlignment.Left,
-            VerticalAlignment = Enum.VerticalAlignment.Center,
-            SortOrder = Enum.SortOrder.LayoutOrder,
-            Parent = ProfileText,
-        })
-
-        ProfileName = New("TextLabel", {
-            BackgroundTransparency = 1,
-            LayoutOrder = 0,
-            Size = UDim2.new(1, 0, 0, 16),
-            Text = "",
-            TextSize = 15,
-            TextTruncate = Enum.TextTruncate.AtEnd,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            Parent = ProfileText,
-        })
-
-        ProfileRole = New("TextLabel", {
-            BackgroundTransparency = 1,
-            LayoutOrder = 1,
-            Size = UDim2.new(1, 0, 0, 14),
-            Text = "",
-            TextSize = 13,
-            TextTransparency = 0.55,
-            TextTruncate = Enum.TextTruncate.AtEnd,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            Parent = ProfileText,
         })
 
         --// Container \\--
@@ -16524,10 +16266,6 @@ function Library:CreateWindow(WindowInfo)
         --// Keep the glow's rounding in step with the window's
         UpdateGlowShape()
 
-        SidebarCorner.CornerRadius = UDim.new(0, PanelRadius(Radius))
-        ProfileCorner.CornerRadius = UDim.new(0, PanelRadius(Radius) - 2)
-        IconWellCorner.CornerRadius = UDim.new(0, MarkRadius(Radius))
-
         ResizeButton.Position = UDim2.new(1, -Radius / 4, 0, 0)
         BottomBackground.Size = UDim2.new(1, 0, 0, 20 + Radius)
 
@@ -16613,99 +16351,6 @@ function Library:CreateWindow(WindowInfo)
         end
     end
 
-    --// Resolves whatever was handed in (true, a user id, a player, a table) into
-    --// the four fields the card actually draws, then paints them.
-    function ApplyProfile(Value)
-        if Value == false or Value == nil then
-            ProfileInfo = nil
-            ProfileCard.Visible = false
-            LayoutSidebar()
-            return
-        end
-
-        local Info = typeof(Value) == "table" and Value or {}
-        if Value == true then
-            Info = { Player = LocalPlayer }
-        elseif typeof(Value) == "string" then
-            Info = { Name = Value }
-        elseif typeof(Value) == "number" then
-            Info = { UserId = Value }
-        elseif typeof(Value) == "Instance" and Value:IsA("Player") then
-            Info = { Player = Value }
-        end
-
-        local Player = Info.Player
-        local UserId = Info.UserId or (Player and Player.UserId)
-        local Name = Info.Name
-            or (Player and (Player.DisplayName ~= "" and Player.DisplayName or Player.Name))
-            or (UserId and ResolvePlayerName(Player, UserId))
-            or "Unknown"
-
-        ProfileInfo = {
-            Name = Name,
-            Role = Info.Role or WindowInfo.ProfileRole or "",
-            Image = Info.Image,
-            UserId = UserId,
-            Player = Player,
-        }
-
-        ProfileName.Text = Name
-        ProfileRole.Text = ProfileInfo.Role
-        ProfileRole.Visible = ProfileInfo.Role ~= ""
-        ProfileName.Size = UDim2.new(1, 0, 0, ProfileRole.Visible and 16 or 20)
-
-        --// A named icon wins, then an explicit image, then the player's thumbnail
-        local Custom = typeof(Info.Image) == "string" and Library:GetCustomIcon(Info.Image) or nil
-        if Custom then
-            Library:ApplyLucideIcon(ProfileAvatar, Custom)
-        else
-            --// A photograph is not a glyph: clear whatever the icon path left
-            --// behind, tint included, or the theme's accent recolours a face
-            Library.Registry[ProfileAvatar] = nil
-            ProfileAvatar.ImageColor3 = Color3.new(1, 1, 1)
-            ProfileAvatar.ImageRectOffset = Vector2.zero
-            ProfileAvatar.ImageRectSize = Vector2.zero
-
-            if typeof(Info.Image) == "string" and Info.Image ~= "" then
-                ProfileAvatar.Image = Info.Image
-            elseif UserId then
-                ProfileAvatar.Image = GetPlayerThumbnail(UserId, Info.Thumbnail, true)
-            else
-                ProfileAvatar.Image = ""
-            end
-        end
-
-        ProfileCard.Visible = true
-        LayoutSidebar()
-    end
-
-    --// One place decides how the rail's height is shared out, so the compact swap
-    --// and the profile being turned on or off cannot disagree about it.
-    function LayoutSidebar()
-        local Shown = ProfileCard.Visible
-        local Height = IsCompact and PROFILE_COMPACT_HEIGHT or PROFILE_HEIGHT
-        local Avatar = IsCompact and PROFILE_COMPACT_AVATAR or PROFILE_AVATAR
-
-        ProfileCard.Size = UDim2.new(1, IsCompact and -8 or -12, 0, Height)
-        ProfileAvatar.Size = UDim2.fromOffset(Avatar, Avatar)
-        ProfileText.Visible = not IsCompact
-
-        --// Compact drops the padding and centres the bust: at 48px there is room
-        --// for the avatar and nothing else, so the card becomes the avatar's frame
-        local Padding = ProfileCard:FindFirstChildOfClass("UIPadding")
-        if Padding then
-            Padding.PaddingLeft = UDim.new(0, IsCompact and 0 or 8)
-            Padding.PaddingRight = UDim.new(0, IsCompact and 0 or 8)
-        end
-        local Layout = ProfileCard:FindFirstChildOfClass("UIListLayout")
-        if Layout then
-            Layout.HorizontalAlignment = IsCompact and Enum.HorizontalAlignment.Center
-                or Enum.HorizontalAlignment.Left
-        end
-
-        Tabs.Size = UDim2.new(1, 0, 1, Shown and -(Height + 12) or 0)
-    end
-
     local function ApplyCompact()
         IsCompact = Window:GetSidebarWidth() == WindowInfo.SidebarCompactWidth
         if WindowInfo.DisableCompactingSnap then
@@ -16715,18 +16360,10 @@ function Library:CreateWindow(WindowInfo)
         --// Live flag the tooltip gate reads: sidebar hints only show when compact
         Library.SidebarCompacted = IsCompact
 
-        --// Compact keeps the mark and drops everything it was introducing: the
-        --// rule has nothing left to separate, so it goes with the wordmark, and
-        --// the well recentres in what is left of the header.
         WindowTitle.Visible = not IsCompact
-        TitleRule.Visible = not IsCompact
-        TitlePadding.PaddingLeft = UDim.new(0, IsCompact and 0 or HEADER_LEFT_PAD + SIDEBAR_INSET)
-        TitlePadding.PaddingRight = UDim.new(0, IsCompact and 0 or 8)
-        TitleHolder:FindFirstChildOfClass("UIListLayout").HorizontalAlignment = IsCompact
-                and Enum.HorizontalAlignment.Center
-            or Enum.HorizontalAlignment.Left
-
-        LayoutSidebar()
+        if not WindowInfo.Icon then
+            WindowIcon.Visible = IsCompact
+        end
 
         for _, Button in Library.TabButtons do
             if not Button.Icon then
@@ -16885,40 +16522,22 @@ function Library:CreateWindow(WindowInfo)
         end
     end
 
-    --// Profile \\--
-    function Window:SetProfile(Info)
-        ApplyProfile(Info)
-        WindowInfo.Profile = Info
-        return ProfileInfo
-    end
-
-    function Window:GetProfile()
-        return ProfileInfo
-    end
-
     function Window:SetCompact(State)
         Window:SetSidebarWidth(State and WindowInfo.SidebarCompactWidth or LastExpandedWidth)
     end
 
     function Window:GetSidebarWidth()
-        return CurrentSidebarWidth
+        return Tabs.Size.X.Offset
     end
 
     function Window:SetSidebarWidth(Width)
         Width = math.clamp(Width, 48, MainFrame.Size.X.Offset - WindowInfo.MinContainerWidth - 1)
-        CurrentSidebarWidth = Width
 
-        DividerLine.Position = UDim2.fromOffset(Width, 49)
+        DividerLine.Position = UDim2.fromOffset(Width, 0)
 
         TitleHolder.Size = UDim2.new(0, Width, 1, 0)
         RightWrapper.Size = UDim2.new(1, -Width - 57 - RightBarInset - 1, 1, -16)
-        --// The rail card keeps the same gutter on both sides, so a compact rail
-        --// narrows the card rather than eating into its own air
-        --// and a rail with barely any width to spare gives its air up first, so a
-        --// compact rail still has room for a full chip
-        local Inset = math.clamp(math.floor((Width - 40) / 6), 2, SIDEBAR_INSET)
-        SidebarPanel.Position = UDim2.fromOffset(Inset, 49 + SIDEBAR_INSET)
-        SidebarPanel.Size = UDim2.new(0, Width - Inset * 2, 1, -70 - SIDEBAR_INSET * 2)
+        Tabs.Size = UDim2.new(0, Width, 1, -70)
         Container.Size = UDim2.new(1, -Width - 1, 1, -70)
 
         if WindowInfo.EnableCompacting then
@@ -20665,9 +20284,6 @@ function Library:CreateWindow(WindowInfo)
     end
 
     Window:SetAlwaysOnTop(WindowInfo.AlwaysOnTop)
-    --// Before the compact pass, so the first layout already knows whether the
-    --// rail has a card at its foot to make room for
-    ApplyProfile(WindowInfo.Profile)
     if WindowInfo.EnableCompacting and WindowInfo.SidebarCompacted then
         Window:SetSidebarWidth(WindowInfo.SidebarCompactWidth)
     end
