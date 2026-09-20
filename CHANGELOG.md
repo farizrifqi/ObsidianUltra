@@ -5,13 +5,20 @@
 * Compact sidebar tabs are now dock chips: while the sidebar is compact, the open
   tab's glyph sits on a 32px accent-filled rounded square (a white-to-grey gradient
   over the accent, plus a white top rim) and flips to black or white -- whichever
-  reads against the accent. Hovering an inactive glyph fades the chip in faintly,
-  and switching tabs grows the chip from 26px. Expanding the sidebar brings the
-  labels back and drops the chip: a row with a label is a row, not a chip, so the
+  reads against the accent. A short accent marker sits hard against the sidebar's
+  left edge, level with the chip. Hovering an inactive glyph fades the chip in
+  faintly, and switching tabs grows the chip from 26px. Expanding the sidebar brings
+  the labels back and drops both: a row with a label is a row, not a chip, so the
   button returns to the plain full-width card.
 * Compact glyphs sit at 18px (padding 6 -> 11) so they read inside the chip.
 * Sidebar tab list gets a 6px gutter with 4px between buttons; minimum sidebar and
   compact widths were nudged up to keep the buttons the same size inside it.
+
+[fixes]
+* Compact chips no longer stay lit as a hover after being selected: Tab:Hover returns
+  early while a tab is the open one, so a tab clicked with the pointer on it was never
+  told the pointer left and lit back up the moment it was deselected. The chip now
+  tracks hover on the button's own signals and drops it on selection.
 ```
 
 ## 02.09.2026

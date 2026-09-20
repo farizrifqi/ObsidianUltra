@@ -2472,6 +2472,13 @@ local TAB_CHIP_REST_SIZE = 26
 local TAB_CHIP_RADIUS = 9
 local TAB_BAR_RADIUS = 8
 
+--// The gutter the tab list is inset by, which the edge marker is pulled back out
+--// by so it lands on the sidebar's own edge rather than the list's
+local TAB_LIST_GUTTER = 6
+local TAB_MARKER_WIDTH = 3
+local TAB_MARKER_HEIGHT = 16
+local TAB_MARKER_REST_HEIGHT = 8
+
 local TAB_CHIP_SHADE = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
     ColorSequenceKeypoint.new(1, Color3.fromRGB(194, 194, 194)),
@@ -2533,6 +2540,25 @@ function Library:SkinTabButton(Button: TextButton)
         Parent = Rim,
     })
 
+    --// The edge marker: a short accent bar hard against the sidebar's left inner
+    --// edge, level with the chip. The tab list is inset by its own gutter, so the
+    --// marker is pulled back out by exactly that much to sit on the edge itself.
+    local Marker = New("Frame", {
+        Active = false,
+        AnchorPoint = Vector2.new(0, 0.5),
+        BackgroundColor3 = "AccentColor",
+        BackgroundTransparency = 1,
+        Name = "TabMarker",
+        Position = UDim2.new(0, -TAB_LIST_GUTTER, 0.5, 0),
+        Size = UDim2.fromOffset(TAB_MARKER_WIDTH, TAB_MARKER_REST_HEIGHT),
+        Visible = false,
+        Parent = Button,
+    })
+    New("UICorner", {
+        CornerRadius = UDim.new(1, 0),
+        Parent = Marker,
+    })
+
     local Skin = {
         Active = false,
         Compact = Library.SidebarCompacted == true,
@@ -2588,6 +2614,19 @@ function Library:SkinTabButton(Button: TextButton)
             Transparency = (Skin.Compact and Skin.Active) and 0.55 or 1,
         }):Play()
 
+        --// The marker belongs to the open tab alone: it is the one mark that does
+        --// not answer to hover, so a pointer wandering the column cannot suggest
+        --// two selected tabs at once.
+        local Lit = Skin.Compact and Skin.Active
+        Marker.Visible = Skin.Compact
+        TweenService:Create(Marker, Library.TweenInfo, {
+            BackgroundTransparency = Lit and 0 or 1,
+            Size = UDim2.fromOffset(
+                TAB_MARKER_WIDTH,
+                Lit and TAB_MARKER_HEIGHT or TAB_MARKER_REST_HEIGHT
+            ),
+        }):Play()
+
         TweenService:Create(Button, Library.TweenInfo, {
             BackgroundTransparency = (not Skin.Compact and Skin.Active) and 0 or 1,
         }):Play()
@@ -2609,6 +2648,13 @@ function Library:SkinTabButton(Button: TextButton)
 
     function Skin:SetActive(Active: boolean)
         Skin.Active = Active == true
+        --// Tab:Hover returns early while a tab is the open one, so a tab clicked
+        --// with the pointer on it would never be told the pointer left and would
+        --// light straight back up as a hover the moment it was deselected. The
+        --// hover is dropped here rather than relied upon to arrive later.
+        if Skin.Active then
+            Skin.Hovered = false
+        end
         Refresh()
     end
 
@@ -2627,6 +2673,15 @@ function Library:SkinTabButton(Button: TextButton)
         Skin.Compact = Compact
         Refresh()
     end
+
+    --// Hover is tracked on the button itself for the same reason: these fire
+    --// whatever the tab's own state is
+    Library:GiveSignal(Button.MouseEnter:Connect(function()
+        Skin:SetHover(true)
+    end))
+    Library:GiveSignal(Button.MouseLeave:Connect(function()
+        Skin:SetHover(false)
+    end))
 
     Library.TabSkins[Button] = Skin
     Refresh()
@@ -19033,7 +19088,6 @@ function Library:CreateWindow(WindowInfo)
                 return
             end
 
-            TabSkin:SetHover(Hovering)
             TweenService:Create(TabLabel, Library.TweenInfo, {
                 TextTransparency = Hovering and 0.25 or 0.5,
             }):Play()
@@ -19463,7 +19517,6 @@ function Library:CreateWindow(WindowInfo)
                 return
             end
 
-            TabSkin:SetHover(Hovering)
             TweenService:Create(TabLabel, Library.TweenInfo, {
                 TextTransparency = Hovering and 0.25 or 0.5,
             }):Play()
