@@ -2,6 +2,11 @@
 
 ```diff
 [changes]
+* Sliders are flat again: the label sits above a plain 15px track with the value
+  centred inside it. The ball, its shadow, the inner ring and the grey track
+  gradient are gone, the bar takes the panel colour rather than the font colour,
+  and both bar and fill round at half the window radius instead of into a pill.
+  The value now reads "6 studs / 10 studs", spaced either side of the slash.
 * Compact sidebar tabs are now dock chips: while the sidebar is compact, the open
   tab's glyph sits on a 30px accent-filled rounded square (a white-to-grey gradient
   over the accent, plus a white top rim) and flips to black or white -- whichever
