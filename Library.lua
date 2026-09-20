@@ -2452,20 +2452,21 @@ function Library:MakeLine(Frame: GuiObject, Info)
     return Line
 end
 
---// Sidebar tab buttons are drawn as rounded chips. The open tab is lit from its
---// top edge: a hairline accent border and a faint accent wash that are brightest
---// along the top and fade out towards the bottom, so the chip reads as catching
---// light rather than sitting inside a blurred halo. Nothing spills outside the
---// button -- both layers are clipped to its own rounded rectangle.
+--// Sidebar tab buttons are drawn as rounded chips. The open tab is a plain, very
+--// slightly raised card whose light comes from its top edge only: the hairline
+--// border is brightest across the top and has died out by a third of the way down,
+--// and the same ramp carries a barely-there wash over the face. Everything is
+--// clipped to the chip's own rounded rectangle -- there is no halo around it, and
+--// the sides and bottom are left unlit, so the chip reads as catching light from
+--// above rather than being outlined or made to glow.
 --//
---// Both the border and the wash carry the same top-to-bottom transparency ramp;
---// a gradient's own transparency is not tweenable, so it only sets the falloff
---// shape and the fade in/out is driven by the parent's transparency, which the
---// gradient modulates.
+--// A gradient's transparency is not tweenable, so the ramp only sets the falloff
+--// shape; the fade in/out on a tab switch is driven by the border's and wash's own
+--// transparency, which the ramp modulates.
 local TAB_CHIP_CORNER = 8
 local TAB_CHIP_FADE = NumberSequence.new({
     NumberSequenceKeypoint.new(0, 0),
-    NumberSequenceKeypoint.new(0.55, 0.75),
+    NumberSequenceKeypoint.new(0.32, 0.9),
     NumberSequenceKeypoint.new(1, 1),
 })
 
@@ -2510,10 +2511,10 @@ function Library:SkinTabButton(Button: TextButton)
 
     return function(Active: boolean)
         TweenService:Create(Wash, Library.TweenInfo, {
-            BackgroundTransparency = Active and 0.8 or 1,
+            BackgroundTransparency = Active and 0.94 or 1,
         }):Play()
         TweenService:Create(Stroke, Library.TweenInfo, {
-            Transparency = Active and 0.15 or 1,
+            Transparency = Active and 0.45 or 1,
         }):Play()
     end
 end
