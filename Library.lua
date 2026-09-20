@@ -2452,6 +2452,59 @@ function Library:MakeLine(Frame: GuiObject, Info)
     return Line
 end
 
+--// Sidebar tab buttons are drawn as rounded, inset chips: a rounded card with a
+--// hairline accent edge and a soft accent halo that only light up on the open tab,
+--// so the active tab reads as a lit chip rather than a full-width bar.
+--//
+--// The halo reuses the window glow's feathered 9-slice asset, padded by its radius
+--// with the slice scaled to match, so the falloff sits inside that padding and hugs
+--// the chip instead of banding into a hard tinted box.
+local TAB_CHIP_CORNER = 8
+local TAB_GLOW_SLICE = 49
+local TAB_GLOW_RADIUS = 14
+
+--// Returns a setter that lights the chip up (open tab) or fades it back out
+function Library:SkinTabButton(Button: TextButton)
+    New("UICorner", {
+        CornerRadius = UDim.new(0, TAB_CHIP_CORNER),
+        Parent = Button,
+    })
+
+    --// ZIndex 0 keeps the halo under the icon and label, which sit at 1
+    local Glow = New("ImageLabel", {
+        Active = false,
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://6014261993",
+        ImageColor3 = "AccentColor",
+        ImageTransparency = 1,
+        Name = "TabGlow",
+        Position = UDim2.fromScale(0.5, 0.5),
+        ScaleType = Enum.ScaleType.Slice,
+        SliceCenter = Rect.new(TAB_GLOW_SLICE, TAB_GLOW_SLICE, 450, 450),
+        SliceScale = TAB_GLOW_RADIUS / TAB_GLOW_SLICE,
+        Size = UDim2.new(1, TAB_GLOW_RADIUS * 2, 1, TAB_GLOW_RADIUS * 2),
+        ZIndex = 0,
+        Parent = Button,
+    })
+
+    local Stroke = New("UIStroke", {
+        Color = "AccentColor",
+        Thickness = 1,
+        Transparency = 1,
+        Parent = Button,
+    })
+
+    return function(Active: boolean)
+        TweenService:Create(Glow, Library.TweenInfo, {
+            ImageTransparency = Active and 0.82 or 1,
+        }):Play()
+        TweenService:Create(Stroke, Library.TweenInfo, {
+            Transparency = Active and 0.55 or 1,
+        }):Play()
+    end
+end
+
 function Library:AddOutline(Frame: GuiObject)
     local OutlineStroke = New("UIStroke", {
         Color = "OutlineColor",
@@ -14617,10 +14670,10 @@ function Library:CreateWindow(WindowInfo)
     if WindowInfo.SidebarMinWidth ~= nil then
         WindowInfo.MinSidebarWidth = WindowInfo.SidebarMinWidth
     end
-    WindowInfo.MinSidebarWidth = math.max(64, WindowInfo.MinSidebarWidth)
-    WindowInfo.SidebarCompactWidth = math.max(48, WindowInfo.SidebarCompactWidth)
+    WindowInfo.MinSidebarWidth = math.max(76, WindowInfo.MinSidebarWidth)
+    WindowInfo.SidebarCompactWidth = math.max(60, WindowInfo.SidebarCompactWidth)
     WindowInfo.SidebarCollapseThreshold = math.clamp(WindowInfo.SidebarCollapseThreshold, 0.1, 0.9)
-    WindowInfo.CompactWidthActivation = math.max(48, WindowInfo.CompactWidthActivation)
+    WindowInfo.CompactWidthActivation = math.max(60, WindowInfo.CompactWidthActivation)
     WindowInfo.SnapDistance = math.max(0, WindowInfo.SnapDistance)
     WindowInfo.SnapMargin = math.max(0, WindowInfo.SnapMargin)
 
@@ -15738,6 +15791,14 @@ function Library:CreateWindow(WindowInfo)
             Parent = MainFrame,
         })
         New("UIListLayout", {
+            Padding = UDim.new(0, 4),
+            Parent = Tabs,
+        })
+        New("UIPadding", {
+            PaddingBottom = UDim.new(0, 6),
+            PaddingLeft = UDim.new(0, 6),
+            PaddingRight = UDim.new(0, 6),
+            PaddingTop = UDim.new(0, 6),
             Parent = Tabs,
         })
 
@@ -16426,6 +16487,7 @@ function Library:CreateWindow(WindowInfo)
         local TabButton: TextButton
         local TabLabel
         local TabIcon
+        local SetTabChipActive
 
         local TabContainer
         local TabCanvas
@@ -16468,6 +16530,7 @@ function Library:CreateWindow(WindowInfo)
                 Text = "",
                 Parent = TabHolder,
             })
+            SetTabChipActive = Library:SkinTabButton(TabButton)
             local ButtonPadding = New("UIPadding", {
                 PaddingBottom = UDim.new(0, IsCompact and 6 or 11),
                 PaddingLeft = UDim.new(0, IsCompact and 6 or 12),
@@ -18939,6 +19002,7 @@ function Library:CreateWindow(WindowInfo)
             TweenService:Create(TabButton, Library.TweenInfo, {
                 BackgroundTransparency = 0,
             }):Play()
+            SetTabChipActive(true)
             TweenService:Create(TabLabel, Library.TweenInfo, {
                 TextTransparency = 0,
             }):Play()
@@ -18970,6 +19034,7 @@ function Library:CreateWindow(WindowInfo)
             TweenService:Create(TabButton, Library.TweenInfo, {
                 BackgroundTransparency = 1,
             }):Play()
+            SetTabChipActive(false)
 
             TweenService:Create(TabLabel, Library.TweenInfo, {
                 TextTransparency = 0.5,
@@ -19120,6 +19185,7 @@ function Library:CreateWindow(WindowInfo)
         local TabButton: TextButton
         local TabLabel
         local TabIcon
+        local SetTabChipActive
 
         local TabCanvas
         local TabContainer
@@ -19134,6 +19200,7 @@ function Library:CreateWindow(WindowInfo)
                 LayoutOrder = Order,
                 Parent = Tabs,
             })
+            SetTabChipActive = Library:SkinTabButton(TabButton)
             local ButtonPadding = New("UIPadding", {
                 PaddingBottom = UDim.new(0, IsCompact and 6 or 11),
                 PaddingLeft = UDim.new(0, IsCompact and 6 or 12),
@@ -19368,6 +19435,7 @@ function Library:CreateWindow(WindowInfo)
             TweenService:Create(TabButton, Library.TweenInfo, {
                 BackgroundTransparency = 0,
             }):Play()
+            SetTabChipActive(true)
 
             TweenService:Create(TabLabel, Library.TweenInfo, {
                 TextTransparency = 0,
@@ -19397,6 +19465,7 @@ function Library:CreateWindow(WindowInfo)
             TweenService:Create(TabButton, Library.TweenInfo, {
                 BackgroundTransparency = 1,
             }):Play()
+            SetTabChipActive(false)
 
             TweenService:Create(TabLabel, Library.TweenInfo, {
                 TextTransparency = 0.5,
