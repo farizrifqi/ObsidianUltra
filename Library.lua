@@ -2482,6 +2482,16 @@ local TAB_MARKER_REST_HEIGHT = 10
 --// The marker is a lit bar, not a dash: both tips give up a little of the fill so
 --// it reads as brightest at its middle and tapers away, instead of ending twice in
 --// a hard cap the chip's own edge then has to compete with.
+--// The chip and the marker do not travel between buttons -- each tab owns its own
+--// pair, and they fade. What the fade alone cannot say is which way the selection
+--// went, so both also slide: the incoming pair enters from the side the previous
+--// tab sits on and settles, and the outgoing pair leaves towards the new one. Two
+--// tabs are briefly moving the same way, which reads as one mark carried down the
+--// column rather than two marks blinking.
+local TAB_TRAVEL_TWEEN = TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+local TAB_MARKER_TRAVEL = 16
+local TAB_CHIP_TRAVEL = 7
+
 local TAB_MARKER_TAPER = NumberSequence.new({
     NumberSequenceKeypoint.new(0, 0.55),
     NumberSequenceKeypoint.new(0.5, 0),
@@ -2574,6 +2584,7 @@ function Library:SkinTabButton(Button: TextButton)
     })
 
     local Skin = {
+        Button = Button,
         Active = false,
         Compact = Library.SidebarCompacted == true,
         Hovered = false,
@@ -2605,7 +2616,12 @@ function Library:SkinTabButton(Button: TextButton)
         end
     end
 
-    local function Refresh()
+    --// Where the pair sits while it is not the open tab's: offset towards whichever
+    --// tab the selection is coming from or going to, so it has somewhere to travel
+    --// from and somewhere to leave towards. Zero until a switch says otherwise.
+    local Travel = 0
+
+    local function Refresh(Instant: boolean?)
         --// Compact: the chip carries the state and the button stays transparent.
         --// Expanded: no chip, and the button is the card it always was.
         local ChipFill = if not Skin.Compact
@@ -2614,7 +2630,15 @@ function Library:SkinTabButton(Button: TextButton)
             elseif Skin.Hovered then 0.88
             else 1
 
+        --// The open tab's pair always settles home; everyone else's waits offset
+        local Offset = Skin.Active and 0 or Travel
+
         Chip.Visible = Skin.Compact
+        if Instant then
+            Chip.Position = UDim2.new(0.5, 0, 0.5, Offset * TAB_CHIP_TRAVEL / TAB_MARKER_TRAVEL)
+            Marker.Position = UDim2.new(0, -TAB_LIST_GUTTER, 0.5, Offset)
+        end
+
         TweenService:Create(Chip, Library.TweenInfo, {
             BackgroundTransparency = ChipFill,
             --// A touch of growth on the way in, so switching tabs has a beat to it
@@ -2622,6 +2646,15 @@ function Library:SkinTabButton(Button: TextButton)
                 Skin.Active and TAB_CHIP_SIZE or TAB_CHIP_REST_SIZE,
                 Skin.Active and TAB_CHIP_SIZE or TAB_CHIP_REST_SIZE
             ),
+        }):Play()
+
+        --// The slide runs on its own curve: the fade is a state change and wants the
+        --// library's timing, the travel is motion and wants to arrive slowly
+        TweenService:Create(Chip, TAB_TRAVEL_TWEEN, {
+            Position = UDim2.new(0.5, 0, 0.5, Offset * TAB_CHIP_TRAVEL / TAB_MARKER_TRAVEL),
+        }):Play()
+        TweenService:Create(Marker, TAB_TRAVEL_TWEEN, {
+            Position = UDim2.new(0, -TAB_LIST_GUTTER, 0.5, Offset),
         }):Play()
 
         TweenService:Create(Rim, Library.TweenInfo, {
@@ -2660,6 +2693,13 @@ function Library:SkinTabButton(Button: TextButton)
         ApplyIcon()
     end
 
+    --// Sends this pair off towards a button further down (1) or up (-1) the column,
+    --// called on the outgoing tab by the incoming one
+    function Skin:Depart(Direction: number)
+        Travel = TAB_MARKER_TRAVEL * Direction
+        Refresh()
+    end
+
     function Skin:SetActive(Active: boolean)
         Skin.Active = Active == true
         --// Tab:Hover returns early while a tab is the open one, so a tab clicked
@@ -2669,6 +2709,31 @@ function Library:SkinTabButton(Button: TextButton)
         if Skin.Active then
             Skin.Hovered = false
         end
+
+        if not Skin.Active then
+            Refresh()
+            return
+        end
+
+        --// The outgoing tab has already been hidden by the time the incoming one is
+        --// shown, so the pair being replaced is picked up here rather than there:
+        --// this is the first moment both ends of the switch are known.
+        local Previous = Library.ActiveTabSkin
+        local Direction = 0
+
+        if Previous and Previous ~= Skin and Previous.Button.Parent then
+            local Above = Previous.Button.AbsolutePosition.Y < Button.AbsolutePosition.Y
+            Direction = Above and -1 or 1
+            --// Selection moved down the column, so the old pair leaves downwards and
+            --// the new one enters from above: both travel with the selection
+            Previous:Depart(-Direction)
+        end
+
+        Library.ActiveTabSkin = Skin
+        Travel = TAB_MARKER_TRAVEL * Direction
+        --// Placed at the offset without a tween, so the slide home has a start
+        Refresh(Direction ~= 0)
+        Travel = 0
         Refresh()
     end
 

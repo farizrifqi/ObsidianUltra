@@ -6,7 +6,11 @@
   tab's glyph sits on a 30px accent-filled rounded square (a white-to-grey gradient
   over the accent, plus a white top rim) and flips to black or white -- whichever
   reads against the accent. A 3x22 accent marker sits hard against the sidebar's
-  left edge, level with the chip, tapering away at both tips. Hovering an inactive glyph fades the chip in
+  left edge, level with the chip, tapering away at both tips. Switching tabs slides
+  both: the incoming pair enters from the side the previous tab sits on while it
+  fades in, and the outgoing pair leaves towards the new one as it fades out, so the
+  mark reads as being carried down the column rather than blinking from place to
+  place. Hovering an inactive glyph fades the chip in
   faintly, and switching tabs grows the chip from 24px. Expanding the sidebar brings
   the labels back and drops both: a row with a label is a row, not a chip, so the
   button returns to the plain full-width card.
