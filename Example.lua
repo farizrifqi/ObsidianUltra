@@ -48,6 +48,10 @@ local Window = Library:CreateWindow({
     ShowCustomCursor = true,
     NotifySide = "Right",
 
+    -- Sidebar identity card. `true` fills itself in from the local player; a table
+    -- gives the fields outright, and `false` hands the whole rail to the tab list.
+    Profile = { Player = LocalPlayer, Role = "Owner" },
+
     -- Footer: bare strings are plain text; a segment is copyable only when it says so,
     -- and CopyText overrides what actually lands on the clipboard.
     Footer = {

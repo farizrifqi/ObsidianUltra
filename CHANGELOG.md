@@ -2,6 +2,29 @@
 
 ```diff
 [changes]
+* The sidebar is a card now, not a slab on the window's edge. The tab list sits in
+  a panel with its own surface, radius and outline, inset 8px on every side, so the
+  gutter reads the same to the left of the rail and to the right of it and the
+  resize divider is a seam between two panels rather than the rail's own edge. A
+  compact rail gives its air up first (down to 2px) so a full chip still fits. The
+  rail/page seam now starts below the header rule instead of running up through it.
+* The header is a left-aligned lockup rather than a centred pair: the mark sits in
+  a rounded well with an outline of its own, then a hairline rule, then the
+  wordmark, all hard against the window's left edge so the header and the rail
+  below it share an origin. The wordmark truncates and gives up width before the
+  mark or the rule do. Compact drops the rule and the wordmark and recentres the
+  well. IconSize now only shrinks the glyph inside the well, never bursts it.
+* New: an identity card pinned to the foot of the sidebar -- circular avatar, name
+  over role, on a raised surface. `Profile = true` (the default) fills it in from
+  the local player; a table gives the fields outright ({ Name, Role, Image, UserId,
+  Player, Thumbnail }); `false` hides it and hands the whole rail back to the tab
+  list. Compact collapses it to the avatar alone. Window:SetProfile / :GetProfile.
+* The open tab's expanded card gets a hairline rim. The rail is a raised surface
+  now, so fill alone was no longer doing all the separating.
+* The rail card, the identity card and the mark's well keep their own rounding
+  instead of joining Library.Corners, which forces every member to the window's
+  exact radius: a nested corner has to be rounder than the one outside it. They
+  track the window radius rather than matching it, and 0 still squares all three.
 * Sliders are flat again: the label sits above a plain 15px track with the value
   centred inside it. The ball, its shadow, the inner ring and the grey track
   gradient are gone, the bar takes the panel colour rather than the font colour,
