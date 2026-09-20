@@ -2472,6 +2472,17 @@ local TAB_CHIP_REST_SIZE = 24
 local TAB_CHIP_RADIUS = 9
 local TAB_BAR_RADIUS = 8
 
+--// The hover well. A compact row is a square the size of the chip it shadows; an
+--// expanded row is the whole card, so it has to grow back out through the button's
+--// own padding to reach the edges the active card fills.
+local TAB_WELL_HOVER_SIZE = 27
+local TAB_ROW_PAD_X = 12
+local TAB_ROW_PAD_Y = 11
+--// A wide surface carries far more light than a 24px square at the same alpha, so
+--// the two wells are tuned apart rather than sharing one number
+local TAB_WELL_COMPACT_ALPHA = 0.88
+local TAB_WELL_ROW_ALPHA = 0.94
+
 --// The gutter the tab list is inset by, which the edge marker is pulled back out
 --// by so it lands on the sidebar's own edge rather than the list's
 local TAB_LIST_GUTTER = 6
@@ -2550,8 +2561,13 @@ function Library:SkinTabButton(Button: TextButton)
     --// Hover is not a weak version of selection. Fading the accent chip up at a
     --// fraction of its strength turns it the colour of the accent mixed into the
     --// sidebar -- muddy at every accent, and readable as "half selected". A hover
-    --// gets its own well instead: the same square, tinted with plain light, which
-    --// says the pointer is here and nothing about what is open.
+    --// gets its own well instead: a surface tinted with plain light, which says the
+    --// pointer is here and nothing about what is open.
+    --//
+    --// The expanded sidebar used to answer a hover by lifting the label a quarter of
+    --// a step out of grey, which is a change you have to be looking for. It gets the
+    --// same well the compact column does, shaped to the row instead of the chip, so
+    --// the two widths behave like one control rather than two.
     local Well = New("Frame", {
         Active = false,
         AnchorPoint = Vector2.new(0.5, 0.5),
@@ -2560,11 +2576,10 @@ function Library:SkinTabButton(Button: TextButton)
         Name = "TabWell",
         Position = UDim2.fromScale(0.5, 0.5),
         Size = UDim2.fromOffset(TAB_CHIP_REST_SIZE, TAB_CHIP_REST_SIZE),
-        Visible = false,
         ZIndex = 0,
         Parent = Button,
     })
-    New("UICorner", {
+    local WellCorner = New("UICorner", {
         CornerRadius = UDim.new(0, TAB_CHIP_RADIUS),
         Parent = Well,
     })
@@ -2584,6 +2599,8 @@ function Library:SkinTabButton(Button: TextButton)
     --// The edge marker: a short accent bar hard against the sidebar's left inner
     --// edge, level with the chip. The tab list is inset by its own gutter, so the
     --// marker is pulled back out by exactly that much to sit on the edge itself.
+    --// It is drawn at both widths: an expanded row is a filled card with no accent
+    --// anywhere on it, and the rail is what ties it back to the compact chip.
     local Marker = New("Frame", {
         Active = false,
         AnchorPoint = Vector2.new(0, 0.5),
@@ -2653,9 +2670,25 @@ function Library:SkinTabButton(Button: TextButton)
         --// The open tab's pair always settles home; everyone else's waits offset
         local Offset = Skin.Active and 0 or Travel
 
-        Well.Visible = Skin.Compact
+        --// Hover only ever reaches a tab that is not the open one
+        local Warm = Skin.Hovered and not Skin.Active
+
+        WellCorner.CornerRadius = UDim.new(0, Skin.Compact and TAB_CHIP_RADIUS or TAB_BAR_RADIUS)
         TweenService:Create(Well, Library.TweenInfo, {
-            BackgroundTransparency = (Skin.Compact and Skin.Hovered and not Skin.Active) and 0.92 or 1,
+            BackgroundTransparency = Warm
+                    and (Skin.Compact and TAB_WELL_COMPACT_ALPHA or TAB_WELL_ROW_ALPHA)
+                or 1,
+            --// Compact, the well swells a little under the pointer, the way the chip
+            --// does when it opens. Expanded, it is already the full card: growing
+            --// that would only make the row look loose, so it holds its shape.
+            Size = Skin.Compact
+                    and UDim2.fromOffset(
+                        Warm and TAB_WELL_HOVER_SIZE or TAB_CHIP_REST_SIZE,
+                        Warm and TAB_WELL_HOVER_SIZE or TAB_CHIP_REST_SIZE
+                    )
+                --// Grown back out through the button's padding, so the hovered row
+                --// covers exactly what the open row's own fill covers
+                or UDim2.new(1, TAB_ROW_PAD_X * 2, 1, TAB_ROW_PAD_Y * 2),
         }):Play()
 
         Chip.Visible = Skin.Compact
@@ -2689,8 +2722,8 @@ function Library:SkinTabButton(Button: TextButton)
         --// The marker belongs to the open tab alone: it is the one mark that does
         --// not answer to hover, so a pointer wandering the column cannot suggest
         --// two selected tabs at once.
-        local Lit = Skin.Compact and Skin.Active
-        Marker.Visible = Skin.Compact
+        local Lit = Skin.Active
+        Marker.Visible = true
         TweenService:Create(Marker, Library.TweenInfo, {
             BackgroundTransparency = Lit and 0 or 1,
             Size = UDim2.fromOffset(
@@ -19042,12 +19075,14 @@ function Library:CreateWindow(WindowInfo)
                 return
             end
 
+            --// The well carries the hover now, so the glyph and label only have to
+            --// come the rest of the way up to full rather than do the work alone
             TweenService:Create(TabLabel, Library.TweenInfo, {
-                TextTransparency = Hovering and 0.25 or 0.5,
+                TextTransparency = Hovering and 0.1 or 0.5,
             }):Play()
             if TabIcon then
                 TweenService:Create(TabIcon, Library.TweenInfo, {
-                    ImageTransparency = Hovering and 0.25 or 0.5,
+                    ImageTransparency = Hovering and 0.1 or 0.5,
                 }):Play()
             end
         end
@@ -19471,12 +19506,14 @@ function Library:CreateWindow(WindowInfo)
                 return
             end
 
+            --// The well carries the hover now, so the glyph and label only have to
+            --// come the rest of the way up to full rather than do the work alone
             TweenService:Create(TabLabel, Library.TweenInfo, {
-                TextTransparency = Hovering and 0.25 or 0.5,
+                TextTransparency = Hovering and 0.1 or 0.5,
             }):Play()
             if TabIcon then
                 TweenService:Create(TabIcon, Library.TweenInfo, {
-                    ImageTransparency = Hovering and 0.25 or 0.5,
+                    ImageTransparency = Hovering and 0.1 or 0.5,
                 }):Play()
             end
         end

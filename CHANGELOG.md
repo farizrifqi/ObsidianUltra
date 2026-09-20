@@ -2,6 +2,20 @@
 
 ```diff
 [changes]
+* Sidebar tab hover is a well at both widths. Expanded rows used to answer a hover by
+  lifting the label from 0.5 to 0.25 transparency and nothing else, which is a change
+  you have to be looking for; they now raise the same light well the compact column
+  does, shaped to the row (the full card, grown back out through the button's padding
+  so it covers exactly what the open row's fill covers) and rounded at the bar radius
+  rather than the chip's. The compact well was raised from 0.92 to 0.88 so it is
+  actually visible, and it swells 24 -> 27px under the pointer the way the chip grows
+  when it opens; the wide row sits at 0.94, since a card carries far more light than a
+  24px square at the same alpha. Label and glyph now go to 0.1 on hover instead of
+  0.25, so the well carries the state and the text only finishes the climb.
+* The accent edge marker is drawn at both widths. An expanded open tab was a filled
+  card with no accent anywhere on it; the 3x22 rail now lights for it too, which ties
+  the expanded row back to the compact chip instead of leaving the two widths looking
+  like different controls.
 * Sliders are flat again: the label sits above a plain 15px track with the value
   centred inside it. The ball, its shadow, the inner ring and the grey track
   gradient are gone, the bar takes the panel colour rather than the font colour,
