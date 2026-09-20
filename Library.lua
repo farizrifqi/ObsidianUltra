@@ -2452,16 +2452,22 @@ function Library:MakeLine(Frame: GuiObject, Info)
     return Line
 end
 
---// Sidebar tab buttons are drawn as rounded, inset chips: a rounded card with a
---// hairline accent edge and a soft accent halo that only light up on the open tab,
---// so the active tab reads as a lit chip rather than a full-width bar.
+--// Sidebar tab buttons are drawn as rounded chips. The open tab is lit from its
+--// top edge: a hairline accent border and a faint accent wash that are brightest
+--// along the top and fade out towards the bottom, so the chip reads as catching
+--// light rather than sitting inside a blurred halo. Nothing spills outside the
+--// button -- both layers are clipped to its own rounded rectangle.
 --//
---// The halo reuses the window glow's feathered 9-slice asset, padded by its radius
---// with the slice scaled to match, so the falloff sits inside that padding and hugs
---// the chip instead of banding into a hard tinted box.
+--// Both the border and the wash carry the same top-to-bottom transparency ramp;
+--// a gradient's own transparency is not tweenable, so it only sets the falloff
+--// shape and the fade in/out is driven by the parent's transparency, which the
+--// gradient modulates.
 local TAB_CHIP_CORNER = 8
-local TAB_GLOW_SLICE = 49
-local TAB_GLOW_RADIUS = 14
+local TAB_CHIP_FADE = NumberSequence.new({
+    NumberSequenceKeypoint.new(0, 0),
+    NumberSequenceKeypoint.new(0.55, 0.75),
+    NumberSequenceKeypoint.new(1, 1),
+})
 
 --// Returns a setter that lights the chip up (open tab) or fades it back out
 function Library:SkinTabButton(Button: TextButton)
@@ -2470,22 +2476,24 @@ function Library:SkinTabButton(Button: TextButton)
         Parent = Button,
     })
 
-    --// ZIndex 0 keeps the halo under the icon and label, which sit at 1
-    local Glow = New("ImageLabel", {
+    --// ZIndex 0 keeps the wash under the icon and label, which sit at 1
+    local Wash = New("Frame", {
         Active = false,
-        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundColor3 = "AccentColor",
         BackgroundTransparency = 1,
-        Image = "rbxassetid://6014261993",
-        ImageColor3 = "AccentColor",
-        ImageTransparency = 1,
-        Name = "TabGlow",
-        Position = UDim2.fromScale(0.5, 0.5),
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(TAB_GLOW_SLICE, TAB_GLOW_SLICE, 450, 450),
-        SliceScale = TAB_GLOW_RADIUS / TAB_GLOW_SLICE,
-        Size = UDim2.new(1, TAB_GLOW_RADIUS * 2, 1, TAB_GLOW_RADIUS * 2),
+        Name = "TabWash",
+        Size = UDim2.fromScale(1, 1),
         ZIndex = 0,
         Parent = Button,
+    })
+    New("UICorner", {
+        CornerRadius = UDim.new(0, TAB_CHIP_CORNER),
+        Parent = Wash,
+    })
+    New("UIGradient", {
+        Rotation = 90,
+        Transparency = TAB_CHIP_FADE,
+        Parent = Wash,
     })
 
     local Stroke = New("UIStroke", {
@@ -2494,13 +2502,18 @@ function Library:SkinTabButton(Button: TextButton)
         Transparency = 1,
         Parent = Button,
     })
+    New("UIGradient", {
+        Rotation = 90,
+        Transparency = TAB_CHIP_FADE,
+        Parent = Stroke,
+    })
 
     return function(Active: boolean)
-        TweenService:Create(Glow, Library.TweenInfo, {
-            ImageTransparency = Active and 0.82 or 1,
+        TweenService:Create(Wash, Library.TweenInfo, {
+            BackgroundTransparency = Active and 0.8 or 1,
         }):Play()
         TweenService:Create(Stroke, Library.TweenInfo, {
-            Transparency = Active and 0.55 or 1,
+            Transparency = Active and 0.15 or 1,
         }):Play()
     end
 end

@@ -2,12 +2,12 @@
 
 ```diff
 [changes]
-* Sidebar tabs are now rounded, inset chips instead of full-width bars: the tab list
-  gets a 6px gutter with 4px between buttons, each button is an 8px-radius card, and
-  the open tab lights up with a hairline accent outline and a soft accent halo (the
-  window glow's feathered 9-slice, padded so it hugs the chip). Baked in — there is
-  nothing to configure. Minimum sidebar/compact widths were nudged up to keep the
-  chips the same size inside the new gutter.
+* Sidebar tabs are now rounded chips instead of full-width bars: the tab list gets a
+  6px gutter with 4px between buttons, each button is an 8px-radius card, and the open
+  tab is lit from its top edge -- a hairline accent border and a faint accent wash,
+  both brightest along the top and fading out downwards, clipped to the chip. Baked
+  in; there is nothing to configure. Minimum sidebar/compact widths were nudged up to
+  keep the chips the same size inside the new gutter.
 ```
 
 ## 02.09.2026
