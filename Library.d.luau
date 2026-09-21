@@ -1463,6 +1463,7 @@ export type Library = {
             IconColor: Color3 | string?,
             BigIcon: string?,
             Type: NotificationType?,
+            LogToHistory: boolean?,
         } | string,
         Time: number?,
         SoundId: string | number?
