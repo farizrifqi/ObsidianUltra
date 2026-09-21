@@ -13923,7 +13923,7 @@ function Library:Notify(...)
         Data.Type = Info.Type
 
         Data.Volume = tonumber(Info.Volume) or 3
-        Data.LogToHistory = Info.LogToHistory or true
+        Data.LogToHistory = Info.LogToHistory
     else
         Data.Description = tostring(Info)
         Data.Time = select(2, ...) or 5
@@ -14248,7 +14248,7 @@ function Library:Notify(...)
     end)
 
     --// Record this notification into the built-in history log \\--
-    if Data.LogToHistory then
+    if Data.LogToHistory ~= false then
         Library:AddNotificationToHistory({
             Title = Data.Title,
             Description = Data.Description,
