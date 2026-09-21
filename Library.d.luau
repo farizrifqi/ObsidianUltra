@@ -1539,7 +1539,7 @@ export type Library = {
             MinSidebarWidth: number?,
             SidebarCompactWidth: number?,
             SidebarCollapseThreshold: number?,
-            DisableCompactAutoTooltip: boolean?
+            DisableCompactAutoTooltip: boolean?,
             CompactWidthActivation: number?,
             Snapping: boolean?,
             SnapDistance: number?,
