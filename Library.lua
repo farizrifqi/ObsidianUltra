@@ -13923,7 +13923,7 @@ function Library:Notify(...)
         Data.Type = Info.Type
 
         Data.Volume = tonumber(Info.Volume) or 3
-        Data.LogToHistory = Info.LogToHistory or false
+        Data.LogToHistory = Info.LogToHistory or true
     else
         Data.Description = tostring(Info)
         Data.Time = select(2, ...) or 5
