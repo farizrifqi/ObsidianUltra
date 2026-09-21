@@ -201,6 +201,7 @@ local Library = {
     --// Notifications \\--
     Notifications = {},
     NotifySide = "Right",
+    DefaultLogNotify = true,
     NotifyTweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 
     --// Notification History (built-in) \\--
@@ -463,6 +464,7 @@ local Templates = {
 
         CornerRadius = 4,
         NotifySide = "Right",
+        DefaultLogNotify = true,
         DisableNotificationBell = false,
         ShowCustomCursor = true,
 
@@ -14248,7 +14250,11 @@ function Library:Notify(...)
     end)
 
     --// Record this notification into the built-in history log \\--
-    if Data.LogToHistory ~= false then
+    local shouldLog = Data.LogToHistory
+    if shouldLog == nil then
+        shouldLog = Library.DefaultLogNotify
+    end
+    if shouldLog then
         Library:AddNotificationToHistory({
             Title = Data.Title,
             Description = Data.Description,
@@ -14842,6 +14848,10 @@ function Library:CreateWindow(WindowInfo)
 
     Library.CornerRadius = WindowInfo.CornerRadius
     Library:SetNotifySide(WindowInfo.NotifySide)
+    Library.DefaultLogNotify = WindowInfo.DefaultLogNotify
+    if Library.DefaultLogNotify == nil then
+        Library.DefaultLogNotify = true
+    end
     Library.ShowCustomCursor = WindowInfo.ShowCustomCursor
     Library.Scheme.Font = WindowInfo.Font
     Library.ToggleKeybind = WindowInfo.ToggleKeybind

@@ -1519,6 +1519,7 @@ export type Library = {
             AutoMinimize: boolean?,
             CornerRadius: number?,
             NotifySide: "Left" | "Right"?,
+            LogToHistory: boolean?,
             DisableNotificationBell: boolean?,
             ShowCustomCursor: boolean?,
             Glow: boolean?,
