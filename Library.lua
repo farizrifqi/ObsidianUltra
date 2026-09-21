@@ -14864,7 +14864,12 @@ function Library:CreateWindow(WindowInfo)
     )
     Library.TabSwipeOffset = math.max(1, WindowInfo.TabSwipeOffset or 26)
     Library.TabSwipeFrom = WindowInfo.TabSwipeFrom or "right"
-
+    
+    -- Tooltip
+    Library.DisableCompactAutoTooltip = WindowInfo.DisableCompactAutoTooltip
+    if Library.DisableCompactAutoTooltip == nil then
+        Library.DisableCompactAutoTooltip = false
+    end
     local MainFrame
     local DividerLine
     local TitleHolder
@@ -18345,7 +18350,7 @@ function Library:CreateWindow(WindowInfo)
 
             --// Sub tab hint; "Sidebar" variant shows only while compact, where
             --// only the icon is visible
-            Library:AddTooltip(SubName, nil, Entry, "Sidebar")
+            if Library.DisableCompactAutoTooltip == false then Library:AddTooltip(SubName, nil, Entry, "Sidebar") end
 
             --// Match whatever mode the sidebar is currently in
             Handle:SetCompact(IsCompact)

@@ -1344,6 +1344,8 @@ export type Library = {
         DownloadAsset: (AssetName: string, ForceRedownload: boolean?) -> nil,
     },
 
+    
+
     -- Methods
     UpdateDependencyBoxes: (self: Library) -> (),
     MatchesSearch: (self: Library, ElementInfo: { [string]: any }, Search: string) -> boolean,
@@ -1519,7 +1521,7 @@ export type Library = {
             AutoMinimize: boolean?,
             CornerRadius: number?,
             NotifySide: "Left" | "Right"?,
-            LogToHistory: boolean?,
+            DefaultLogNotify: boolean?,
             DisableNotificationBell: boolean?,
             ShowCustomCursor: boolean?,
             Glow: boolean?,
@@ -1537,6 +1539,7 @@ export type Library = {
             MinSidebarWidth: number?,
             SidebarCompactWidth: number?,
             SidebarCollapseThreshold: number?,
+            DisableCompactAutoTooltip: boolean?
             CompactWidthActivation: number?,
             Snapping: boolean?,
             SnapDistance: number?,
