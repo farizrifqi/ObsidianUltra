@@ -14251,10 +14251,8 @@ function Library:Notify(...)
 
     --// Record this notification into the built-in history log \\--
     local shouldLog = Data.LogToHistory
-    print(shouldLog)
     if shouldLog == nil then
         shouldLog = Library.DefaultLogNotify
-        print("Inside IF", shouldLog)
     end
     if shouldLog then
         Library:AddNotificationToHistory({
@@ -14267,7 +14265,6 @@ function Library:Notify(...)
             Type = Data.Type,
         })
     end
-
     return Data
 end
 
