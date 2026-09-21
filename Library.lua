@@ -16759,7 +16759,7 @@ function Library:CreateWindow(WindowInfo)
             --// variant, only shows while the sidebar is compact (where the label is
             --// hidden), so it never redundantly repeats a label you can already read
             local TabTooltipText = typeof(Tooltip) == "string" and Tooltip or Name
-            Library:AddTooltip(TabTooltipText, DisabledTooltip, TabButton, "Sidebar")
+            if Library.DisableCompactAutoTooltip == false then Library:AddTooltip(TabTooltipText, DisabledTooltip, TabButton, "Sidebar") end
 
             --// Tab Canvas \\--
             TabCanvas = New("CanvasGroup", {
