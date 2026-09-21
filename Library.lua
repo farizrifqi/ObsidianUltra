@@ -13923,6 +13923,7 @@ function Library:Notify(...)
         Data.Type = Info.Type
 
         Data.Volume = tonumber(Info.Volume) or 3
+        Data.LogToHistory = Info.LogToHistory or false
     else
         Data.Description = tostring(Info)
         Data.Time = select(2, ...) or 5
@@ -14247,15 +14248,17 @@ function Library:Notify(...)
     end)
 
     --// Record this notification into the built-in history log \\--
-    Library:AddNotificationToHistory({
-        Title = Data.Title,
-        Description = Data.Description,
-        TitleColor = Data.TitleColor,
-        DescriptionColor = Data.DescriptionColor,
-        Icon = Data.Icon,
-        IconColor = Data.IconColor,
-        Type = Data.Type,
-    })
+    if Data.LogToHistory then
+        Library:AddNotificationToHistory({
+            Title = Data.Title,
+            Description = Data.Description,
+            TitleColor = Data.TitleColor,
+            DescriptionColor = Data.DescriptionColor,
+            Icon = Data.Icon,
+            IconColor = Data.IconColor,
+            Type = Data.Type,
+        })
+    end
 
     return Data
 end
